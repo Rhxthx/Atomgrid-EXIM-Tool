@@ -13,8 +13,10 @@ mkdir -p "$(dirname "${EXIM_DUCKDB_PATH:-/data/trade_database.duckdb}")"
 if [ -n "$DATA_URL" ]; then
   if [ "${DATA_FORCE_REFRESH:-0}" = "1" ] || [ ! -f "${EXIM_DUCKDB_PATH}" ]; then
     echo "[entrypoint] Downloading trade database from DATA_URL ..."
-    python - <<'PY'
-import os, shutil, urllib.request
+    # A download failure MUST NOT crash the container — log and start anyway,
+    # so the app is reachable and DATA_URL can be corrected without a crash loop.
+    python - <<'PY' || echo "[entrypoint] WARNING: data download FAILED — check that DATA_URL is a valid DIRECT link. Starting the app without data for now."
+import os, urllib.request
 url = os.environ["DATA_URL"]
 dest = os.environ["EXIM_DUCKDB_PATH"]
 tmp = dest + ".part"
