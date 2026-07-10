@@ -16,31 +16,37 @@ if [ -n "$DATA_URL" ]; then
     # A download failure MUST NOT crash the container — log and start anyway,
     # so the app is reachable and DATA_URL can be corrected without a crash loop.
     python - <<'PY' || echo "[entrypoint] WARNING: data download FAILED — check DATA_URL and that the file is shared 'Anyone with the link'. Starting the app without data for now."
-import os, urllib.request
+import os, re, urllib.request
 url = os.environ["DATA_URL"]
 dest = os.environ["EXIM_DUCKDB_PATH"]
 tmp = dest + ".part"
+
+# For Google Drive links, extract the file ID and hit the direct download
+# endpoint with confirm=t (bypasses the large-file virus-scan interstitial).
+dl = url
 if "drive.google.com" in url or "drive.usercontent.google.com" in url:
-    # Google Drive large files need the virus-scan confirm dance — gdown does it.
-    import gdown
-    out = gdown.download(url=url, output=tmp, quiet=False, fuzzy=True)
-    if not out:
-        raise RuntimeError("gdown returned nothing — is the file shared 'Anyone with the link'?")
-else:
-    req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
-    with urllib.request.urlopen(req) as r, open(tmp, "wb") as f:
-        total = int(r.headers.get("Content-Length") or 0)
-        done = 0
-        while True:
-            chunk = r.read(1 << 20)      # 1 MB
-            if not chunk:
-                break
-            f.write(chunk)
-            done += len(chunk)
-            if total:
-                print(f"  {done/1e6:.0f} / {total/1e6:.0f} MB", end="\r")
+    m = re.search(r"/d/([A-Za-z0-9_-]{20,})", url) or re.search(r"[?&]id=([A-Za-z0-9_-]{20,})", url)
+    if not m:
+        raise RuntimeError("Could not parse a Google Drive file ID from DATA_URL")
+    dl = f"https://drive.usercontent.google.com/download?id={m.group(1)}&export=download&confirm=t"
+
+req = urllib.request.Request(dl, headers={"User-Agent": "Mozilla/5.0"})
+with urllib.request.urlopen(req) as r, open(tmp, "wb") as f:
+    ctype = r.headers.get("Content-Type", "")
+    if "text/html" in ctype:
+        raise RuntimeError("Got an HTML page, not a file — check the link/sharing")
+    total = int(r.headers.get("Content-Length") or 0)
+    done = 0
+    while True:
+        chunk = r.read(1 << 20)          # 1 MB
+        if not chunk:
+            break
+        f.write(chunk)
+        done += len(chunk)
+        if total:
+            print(f"  {done/1e6:.0f} / {total/1e6:.0f} MB", end="\r")
 os.replace(tmp, dest)                    # atomic — no half-written DB
-print("\n[entrypoint] Download complete.")
+print(f"\n[entrypoint] Download complete: {done/1e6:.0f} MB")
 PY
   fi
 fi
