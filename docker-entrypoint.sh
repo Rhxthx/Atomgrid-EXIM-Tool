@@ -15,25 +15,32 @@ if [ -n "$DATA_URL" ]; then
     echo "[entrypoint] Downloading trade database from DATA_URL ..."
     # A download failure MUST NOT crash the container — log and start anyway,
     # so the app is reachable and DATA_URL can be corrected without a crash loop.
-    python - <<'PY' || echo "[entrypoint] WARNING: data download FAILED — check that DATA_URL is a valid DIRECT link. Starting the app without data for now."
+    python - <<'PY' || echo "[entrypoint] WARNING: data download FAILED — check DATA_URL and that the file is shared 'Anyone with the link'. Starting the app without data for now."
 import os, urllib.request
 url = os.environ["DATA_URL"]
 dest = os.environ["EXIM_DUCKDB_PATH"]
 tmp = dest + ".part"
-req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
-with urllib.request.urlopen(req) as r, open(tmp, "wb") as f:
-    total = int(r.headers.get("Content-Length") or 0)
-    done = 0
-    while True:
-        chunk = r.read(1 << 20)          # 1 MB
-        if not chunk:
-            break
-        f.write(chunk)
-        done += len(chunk)
-        if total:
-            print(f"  {done/1e6:.0f} / {total/1e6:.0f} MB", end="\r")
+if "drive.google.com" in url or "drive.usercontent.google.com" in url:
+    # Google Drive large files need the virus-scan confirm dance — gdown does it.
+    import gdown
+    out = gdown.download(url=url, output=tmp, quiet=False, fuzzy=True)
+    if not out:
+        raise RuntimeError("gdown returned nothing — is the file shared 'Anyone with the link'?")
+else:
+    req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
+    with urllib.request.urlopen(req) as r, open(tmp, "wb") as f:
+        total = int(r.headers.get("Content-Length") or 0)
+        done = 0
+        while True:
+            chunk = r.read(1 << 20)      # 1 MB
+            if not chunk:
+                break
+            f.write(chunk)
+            done += len(chunk)
+            if total:
+                print(f"  {done/1e6:.0f} / {total/1e6:.0f} MB", end="\r")
 os.replace(tmp, dest)                    # atomic — no half-written DB
-print(f"\n[entrypoint] Download complete: {done/1e6:.0f} MB")
+print("\n[entrypoint] Download complete.")
 PY
   fi
 fi
