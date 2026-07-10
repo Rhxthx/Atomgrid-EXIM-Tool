@@ -1,0 +1,154 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    /* ------------ Phase 1: ingest pipeline ------------ */
+    {
+      "label": "Phase 1: run ingest pipeline",
+      "type": "shell",
+      "command": "python",
+      "args": ["main.py", "--source", "E:\\Atomgrid\\EXIM India"],
+      "options": { "cwd": "${workspaceFolder}" },
+      "presentation": { "panel": "dedicated", "clear": true },
+      "problemMatcher": []
+    },
+
+    /* ------------ Phase 2: FastAPI backend ------------ */
+    {
+      "label": "Backend: install deps",
+      "type": "shell",
+      "command": "python",
+      "args": ["-m", "pip", "install", "-r", "requirements.txt"],
+      "options": { "cwd": "${workspaceFolder}/backend" },
+      "problemMatcher": []
+    },
+    {
+      "label": "Backend: run dev (uvicorn)",
+      "type": "shell",
+      "command": "python",
+      "args": ["main.py"],
+      "options": {
+        "cwd": "${workspaceFolder}/backend",
+        "env": { "EXIM_RELOAD": "true" }
+      },
+      "isBackground": true,
+      "presentation": { "panel": "dedicated", "group": "servers" },
+      "problemMatcher": {
+        "owner": "uvicorn",
+        "pattern": { "regexp": "." },
+        "background": {
+          "activeOnStart": true,
+          "beginsPattern": ".",
+          "endsPattern": "Uvicorn running on"
+        }
+      }
+    },
+    {
+      "label": "Backend: run tests (pytest)",
+      "type": "shell",
+      "command": "python",
+      "args": ["-m", "pytest", "tests", "-v"],
+      "options": { "cwd": "${workspaceFolder}/backend" },
+      "problemMatcher": []
+    },
+    {
+      "label": "Backend: add _search column (one-shot speedup)",
+      "type": "shell",
+      "command": "python",
+      "args": ["-m", "scripts.add_search_column"],
+      "options": { "cwd": "${workspaceFolder}/backend" },
+      "problemMatcher": []
+    },
+
+    /* ------------ Phase 3: frontend ------------ */
+    {
+      "label": "Frontend: install deps",
+      "type": "shell",
+      "command": "npm",
+      "args": ["install"],
+      "options": { "cwd": "${workspaceFolder}/frontend" },
+      "problemMatcher": []
+    },
+    {
+      "label": "Frontend: run dev (vite)",
+      "type": "shell",
+      "command": "npm",
+      "args": ["run", "dev"],
+      "options": { "cwd": "${workspaceFolder}/frontend" },
+      "isBackground": true,
+      "presentation": { "panel": "dedicated", "group": "servers" },
+      "problemMatcher": {
+        "owner": "vite",
+        "pattern": { "regexp": "." },
+        "background": {
+          "activeOnStart": true,
+          "beginsPattern": "VITE",
+          "endsPattern": "ready in"
+        }
+      }
+    },
+    {
+      "label": "Frontend: build (tsc + vite)",
+      "type": "shell",
+      "command": "npm",
+      "args": ["run", "build"],
+      "options": { "cwd": "${workspaceFolder}/frontend" },
+      "problemMatcher": ["$tsc"]
+    },
+
+    /* ------------ Combined: start both dev servers ------------ */
+    {
+      "label": "Run all (backend + frontend)",
+      "dependsOn": ["Backend: run dev (uvicorn)", "Frontend: run dev (vite)"],
+      "dependsOrder": "parallel",
+      "problemMatcher": []
+    },
+
+    /* ------------ Deploy: build + share via Cloudflare Tunnel ------------ */
+    {
+      "label": "Deploy: serve prod locally (build + run unified)",
+      "type": "shell",
+      "command": "python",
+      "args": ["main.py"],
+      "options": { "cwd": "${workspaceFolder}/backend" },
+      "dependsOn": ["Frontend: build (tsc + vite)"],
+      "dependsOrder": "sequence",
+      "presentation": { "panel": "dedicated", "group": "deploy" },
+      "isBackground": true,
+      "problemMatcher": {
+        "owner": "uvicorn",
+        "pattern": { "regexp": "." },
+        "background": {
+          "activeOnStart": true,
+          "beginsPattern": ".",
+          "endsPattern": "Uvicorn running on"
+        }
+      }
+    },
+    {
+      "label": "Deploy: start Cloudflare Quick Tunnel (public URL)",
+      "type": "shell",
+      "command": "cloudflared",
+      "args": ["tunnel", "--url", "http://localhost:8000"],
+      "presentation": { "panel": "dedicated", "group": "deploy", "clear": true },
+      "isBackground": true,
+      "problemMatcher": {
+        "owner": "cloudflared",
+        "pattern": { "regexp": "." },
+        "background": {
+          "activeOnStart": true,
+          "beginsPattern": ".",
+          "endsPattern": "trycloudflare\\.com"
+        }
+      }
+    },
+    {
+      "label": "Deploy: share with team (build + serve + tunnel)",
+      "dependsOn": [
+        "Deploy: serve prod locally (build + run unified)",
+        "Deploy: start Cloudflare Quick Tunnel (public URL)"
+      ],
+      "dependsOrder": "sequence",
+      "problemMatcher": []
+    }
+  ]
+}

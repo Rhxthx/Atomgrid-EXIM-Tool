@@ -1,0 +1,94 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/*
+ * Color tokens.  Two themes: dark (default — fits a B2B intelligence
+ * platform) and light (toggle via the html.dark class).  All hues are
+ * authored as HSL so Tailwind utilities like bg-primary/80 work.
+ */
+@layer base {
+  :root {
+    --background: 220 24% 98%;
+    --foreground: 220 24% 10%;
+    --card: 0 0% 100%;
+    --card-foreground: 220 24% 10%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 220 24% 10%;
+    --primary: 217 91% 60%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 220 14% 96%;
+    --secondary-foreground: 220 24% 10%;
+    --muted: 220 14% 94%;
+    --muted-foreground: 220 9% 42%;
+    --accent: 220 14% 94%;
+    --accent-foreground: 220 24% 10%;
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 220 13% 88%;
+    --input: 220 13% 88%;
+    --ring: 217 91% 60%;
+    --radius: 0.6rem;
+    --chart-1: 217 91% 60%;
+    --chart-2: 142 71% 45%;
+    --chart-3: 32 95% 55%;
+    --chart-4: 271 81% 60%;
+    --chart-5: 339 90% 60%;
+    --chart-6: 174 72% 45%;
+  }
+
+  .dark {
+    --background: 222 24% 7%;
+    --foreground: 220 13% 95%;
+    --card: 222 22% 10%;
+    --card-foreground: 220 13% 95%;
+    --popover: 222 22% 10%;
+    --popover-foreground: 220 13% 95%;
+    --primary: 217 91% 65%;
+    --primary-foreground: 222 24% 7%;
+    --secondary: 222 16% 16%;
+    --secondary-foreground: 220 13% 95%;
+    --muted: 222 16% 14%;
+    --muted-foreground: 220 9% 65%;
+    --accent: 222 16% 16%;
+    --accent-foreground: 220 13% 95%;
+    --destructive: 0 72% 55%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 222 16% 18%;
+    --input: 222 16% 18%;
+    --ring: 217 91% 65%;
+    --chart-1: 217 91% 65%;
+    --chart-2: 142 71% 55%;
+    --chart-3: 32 95% 60%;
+    --chart-4: 271 91% 70%;
+    --chart-5: 339 95% 67%;
+    --chart-6: 174 72% 55%;
+  }
+}
+
+@layer base {
+  * { @apply border-border; }
+  body {
+    @apply bg-background text-foreground antialiased;
+    font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    font-feature-settings: "rlig" 1, "calt" 1, "ss01" 1;
+  }
+  /* Custom thin scrollbar — fits the enterprise look */
+  ::-webkit-scrollbar { width: 10px; height: 10px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb {
+    background: hsl(var(--border));
+    border-radius: 999px;
+    border: 2px solid hsl(var(--background));
+  }
+  ::-webkit-scrollbar-thumb:hover { background: hsl(var(--muted-foreground) / 0.4); }
+}
+
+/* Recharts axis tick contrast in dark mode */
+.recharts-cartesian-axis-tick-value { fill: hsl(var(--muted-foreground)); }
+.recharts-default-tooltip {
+  background: hsl(var(--popover)) !important;
+  border: 1px solid hsl(var(--border)) !important;
+  border-radius: var(--radius) !important;
+  color: hsl(var(--popover-foreground)) !important;
+}

@@ -1,0 +1,20 @@
+# Dependencies / build output
+node_modules/
+frontend/dist/
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# Data & secrets — NEVER commit (too big for GitHub + sensitive).
+# The whole output/ folder is generated data artifacts; the app gets its
+# .duckdb from the volume / rebuild, never from git.
+output/
+logs/
+.env
+.claude/
+
+# Packaging / OS cruft
+*.zip
+.DS_Store
+Thumbs.db

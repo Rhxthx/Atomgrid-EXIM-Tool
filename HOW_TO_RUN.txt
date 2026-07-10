@@ -1,0 +1,77 @@
+===========================================================
+ EXIM Data Merge - How To Run (Quick Guide)
+===========================================================
+
+WHAT THIS IS
+  A trade-intelligence dashboard over India EXIM customs data.
+  - Backend : Python + FastAPI  (serves the API and the built website)
+  - Frontend: React + Vite
+  - Database: DuckDB  ->  output\trade_database.duckdb
+
+-----------------------------------------------------------
+ FIRST TIME ON A NEW LAPTOP  (do this once)
+-----------------------------------------------------------
+1) Install Python 3.11+   from https://www.python.org/downloads/
+   IMPORTANT: tick "Add python.exe to PATH" during install.
+
+2) Install Node.js LTS v20+  from https://nodejs.org/
+
+3) Copy the WHOLE project folder to the new laptop.
+   IMPORTANT: make sure this file comes with it:
+       output\trade_database.duckdb   (about 160 MB)
+   (Large files sometimes get skipped by zip / cloud sync.)
+
+4) Double-click:  setup_new_laptop.bat
+   -> installs all Python and Node dependencies automatically.
+
+-----------------------------------------------------------
+ EVERY TIME YOU WANT TO USE THE APP
+-----------------------------------------------------------
+   Double-click:  2_run_app.bat
+
+   Then open your browser at:
+       http://127.0.0.1:8000        (the dashboard)
+       http://127.0.0.1:8000/docs   (API documentation)
+
+   Two terminal windows will open (backend + frontend).
+   Leave them open while using the app. Close them to stop.
+
+-----------------------------------------------------------
+ IF THE DATABASE IS MISSING
+-----------------------------------------------------------
+ The app needs:  output\trade_database.duckdb
+ If it is missing you have two options:
+
+ A) Copy trade_database.duckdb from the other laptop into the
+    output\ folder.
+
+ B) Rebuild it from the source Excel files:
+       python main.py --source "PATH\TO\India EXIM"
+    (The source folder may contain sub-folders; the rebuild
+     script handles the column mapping automatically.)
+
+-----------------------------------------------------------
+ ADDING NEW MONTHLY DATA (rebuild the database)
+-----------------------------------------------------------
+ 1) Put the new .xlsx files in your India EXIM data folder.
+ 2) Run:
+       python main.py --source "PATH\TO\India EXIM"
+ 3) This rebuilds output\trade_database.duckdb with the new data.
+    (A backup of the previous DB is recommended before rebuilding.)
+
+ Business rule baked into the data:
+   - Import files (HSN 29 or 3808): Destination Country = INDIA
+   - Export files (HSN 3808)       : Origin Country      = INDIA
+   The foreign country is filled into the opposite column.
+
+-----------------------------------------------------------
+ HELPER FILES IN THIS FOLDER
+-----------------------------------------------------------
+   setup_new_laptop.bat   - one-time install of all dependencies
+   2_run_app.bat          - start the app (backend + frontend)
+   main.py                - rebuild the database from Excel files
+   requirements.txt       - Python deps (data pipeline)
+   backend\requirements.txt - Python deps (API)
+   frontend\package.json  - Node deps (website)
+
+===========================================================

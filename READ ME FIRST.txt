@@ -1,0 +1,68 @@
+============================================================
+  ATOMGRID EXIM TOOL  —  How to install & run
+============================================================
+
+WHAT THIS IS
+  A trade-intelligence dashboard over global EXIM (import/export)
+  customs data across multiple countries. Runs locally on your PC
+  and opens in your web browser.
+
+------------------------------------------------------------
+ STEP 1 — Install Python (one time)
+------------------------------------------------------------
+  1. Go to https://www.python.org/downloads/
+  2. Download Python 3.11 or newer (3.13 recommended)
+  3. Run the installer and TICK the box:
+        [x] Add python.exe to PATH
+  4. Finish the install.
+
+  (You do NOT need Node.js — the app's screen is already built in.)
+
+------------------------------------------------------------
+ STEP 2 — Run the tool
+------------------------------------------------------------
+
+  >>> ON WINDOWS:
+  1. Double-click:   START HERE.bat
+  2. The first run installs a few components (needs internet, ~1 min).
+  3. Your browser opens automatically at  http://127.0.0.1:8000
+  4. A small "server" window stays open — that IS the app.
+     Keep it open while you use the tool. Close it to stop.
+  Next time, just double-click START HERE.bat again.
+
+  >>> ON MAC:
+  1. Double-click:   START HERE (Mac).command
+       - First time, macOS may block it ("unidentified developer").
+         Fix: right-click the file -> Open -> Open;  OR open the
+         Terminal app and run:
+            chmod +x "START HERE (Mac).command"
+         then double-click it again.
+       - Or simply run in Terminal:
+            bash "START HERE (Mac).command"
+  2. The first run sets up a small environment (needs internet, ~1-2 min).
+  3. Your browser opens automatically at  http://127.0.0.1:8000
+  4. Keep the Terminal window open while using the tool (Ctrl+C to stop).
+  Next time, launch it the same way (it's quick after the first run).
+
+------------------------------------------------------------
+ WHAT YOU CAN DO
+------------------------------------------------------------
+  - Global Search   : search shipments across all countries
+  - Shipment Explorer: filter by country, HSN, date, importer,
+                       supplier, value, etc. + export to CSV
+  - Query Builder, HSN Analysis, Country Analysis, Trends
+  - Argentina Imports (separate agrochemical dataset)
+
+------------------------------------------------------------
+ TROUBLESHOOTING
+------------------------------------------------------------
+  - "Python is not installed": redo Step 1 and make sure you
+    ticked "Add python.exe to PATH", then reopen START HERE.bat.
+  - Browser shows nothing: wait ~10 seconds and refresh
+    http://127.0.0.1:8000 (the server needs a moment to load the data).
+  - Port already in use: close any old server window first.
+
+  Data included: ~4 million shipment records (single file,
+  output\trade_database.duckdb). This is a read-only viewer —
+  using it never changes the data.
+============================================================

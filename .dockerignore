@@ -1,0 +1,19 @@
+# Keep the build context (and image) small. Data lives on the volume, not
+# in the image; node_modules/dist are rebuilt inside the image.
+**/node_modules
+**/__pycache__
+**/*.pyc
+.git
+.venv
+.claude
+frontend/dist
+output/
+logs/
+*.duckdb
+*.db
+*.parquet
+*.bak
+*.zip
+# Windows/Mac desktop launchers not used in the container
+*.bat
+*.command

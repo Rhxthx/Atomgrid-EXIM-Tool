@@ -1,0 +1,12 @@
+# Phase 1 — EXIM Data Merge pipeline
+# Tested on Python 3.11+ (3.13 also supported)
+
+polars>=1.10
+pandas>=2.2
+pyarrow>=17.0
+duckdb>=1.1
+openpyxl>=3.1
+fastexcel>=0.12     # Calamine engine for polars.read_excel — much faster than openpyxl
+rapidfuzz>=3.10
+python-dateutil>=2.9
+xlsxwriter>=3.2     # writing column_mapping_report.xlsx

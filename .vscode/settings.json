@@ -1,0 +1,31 @@
+{
+  // Use the system Python by default — switch to a venv via the status bar.
+  "python.defaultInterpreterPath": "python",
+
+  // Where Tailwind IntelliSense should look for the config + utility classes.
+  "tailwindCSS.experimental.classRegex": [
+    ["cva\\(([^)]*)\\)", "[\"'`]([^\"'`]*).*?[\"'`]"],
+    ["cn\\(([^)]*)\\)", "[\"'`]([^\"'`]*).*?[\"'`]"]
+  ],
+
+  // ESLint runs from the frontend subfolder.
+  "eslint.workingDirectories": [{ "directory": "frontend", "changeProcessCWD": true }],
+
+  // File associations
+  "files.associations": { "*.css": "tailwindcss" },
+
+  // Trim trailing whitespace + final newline for everything we touch.
+  "files.trimTrailingWhitespace": true,
+  "files.insertFinalNewline": true,
+
+  // Hide noisy folders from the explorer (still searchable via Ctrl+P).
+  "files.exclude": {
+    "**/__pycache__": true,
+    "**/*.pyc": true,
+    "**/.pytest_cache": true,
+    "**/node_modules": true,
+    "**/dist": true,
+    "**/.vite": true,
+    "output/_shards": true
+  }
+}
