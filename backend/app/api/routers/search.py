@@ -17,10 +17,12 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import StreamingResponse
 
 from app.api.deps import get_db_dep
+from app.auth.security import get_current_user
+from app.config import Settings, get_settings
 from app.database import DuckDBClient
 from app.schemas import Meta, PaginatedShipments, ShipmentRecord
 from app.schemas.filters import FilterParams, filter_params_dep
-from app.services.search import export_shipments_csv, list_shipments
+from app.services.search import EXPORT_ROW_CAP, export_shipments_csv, list_shipments
 
 log = logging.getLogger(__name__)
 
@@ -76,17 +78,21 @@ def shipments(
     return _build_response(data, total, ms, applied, filters.page, filters.page_size)
 
 
-@router.get("/export", summary="Export ALL rows matching the filters as CSV")
+@router.get("/export", summary="Export rows matching the filters as CSV")
 def export_csv(
     filters: FilterParams = Depends(filter_params_dep),
     db: DuckDBClient = Depends(get_db_dep),
+    user: dict = Depends(get_current_user),
+    settings: Settings = Depends(get_settings),
 ) -> StreamingResponse:
-    """Download every row matching the current filters (not just one page).
+    """Download rows matching the current filters (not just one page).
 
-    Streams a UTF-8 CSV (opens directly in Excel). Capped at 1,000,000 rows for
-    safety — well above any typical filtered search, and within Excel's limit.
+    Streams a UTF-8 CSV (opens directly in Excel). Admins get the full result
+    set (capped at 1,000,000 rows for safety — within Excel's limit); non-admin
+    users are limited to ``EXIM_USER_EXPORT_CAP`` rows (default 50).
     """
-    stream = export_shipments_csv(db, filters)
+    row_cap = EXPORT_ROW_CAP if user["role"] == "admin" else settings.user_export_cap
+    stream = export_shipments_csv(db, filters, row_cap=row_cap)
     return StreamingResponse(
         stream,
         media_type="text/csv; charset=utf-8",

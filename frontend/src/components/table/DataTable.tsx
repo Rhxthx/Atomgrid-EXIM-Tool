@@ -39,6 +39,13 @@ export interface DataTableProps<TData> {
    */
   serverExportUrl?: string;
   /**
+   * When set, the current user's server export is capped at this many rows
+   * (non-admins). The backend enforces the same cap; this only adjusts the
+   * button label/tooltip so the limit is clear. Leave undefined for admins
+   * (full export).
+   */
+  exportRowLimit?: number;
+  /**
    * Optional row expander.  When provided, each row gets a chevron that
    * toggles a details panel rendered via this function.
    */
@@ -67,6 +74,7 @@ export function DataTable<TData>({
   emptyMessage = "No data.",
   csvFilename = "export.csv",
   serverExportUrl,
+  exportRowLimit,
   renderExpanded,
   className,
 }: DataTableProps<TData>) {
@@ -165,10 +173,16 @@ export function DataTable<TData>({
               size="sm"
               onClick={exportAll}
               disabled={loading || (serverPagination?.total ?? data.length) === 0}
-              title="Download all rows matching the current filters (opens in Excel)"
+              title={
+                exportRowLimit
+                  ? `Download the first ${exportRowLimit.toLocaleString()} rows matching your filters (opens in Excel). Full export is available to administrators.`
+                  : "Download all rows matching the current filters (opens in Excel)"
+              }
             >
               <Download className="mr-1.5 h-3.5 w-3.5" />
-              Export to Excel
+              {exportRowLimit
+                ? `Export to Excel (max ${exportRowLimit.toLocaleString()})`
+                : "Export to Excel"}
             </Button>
           ) : (
             <Button variant="outline" size="sm" onClick={exportCsv} disabled={loading || data.length === 0}>

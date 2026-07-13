@@ -236,12 +236,16 @@ def list_shipments(
 EXPORT_ROW_CAP = 1_000_000
 
 
-def export_shipments_csv(db: DuckDBClient, f: FilterParams):
-    """Stream ALL rows matching the current filters as CSV (not just one page).
+def export_shipments_csv(db: DuckDBClient, f: FilterParams, *, row_cap: int = EXPORT_ROW_CAP):
+    """Stream rows matching the current filters as CSV (not just one page).
 
     Uses the same WHERE builder as the paginated search, so the export reflects
     exactly what the user searched. Rows are fetched in batches and written
     incrementally, so even large exports stay memory-safe.
+
+    ``row_cap`` bounds how many rows are written — admins get the full
+    ``EXPORT_ROW_CAP``; non-admins are limited to a small per-role cap set by
+    the caller.
     """
     import csv
     import io
@@ -250,7 +254,7 @@ def export_shipments_csv(db: DuckDBClient, f: FilterParams):
     order_by = _order_by_clause(f)
     sql = (
         f"SELECT {ALL_COLS_SQL} FROM {TABLE} {where} "
-        f"{order_by} LIMIT {EXPORT_ROW_CAP}"
+        f"{order_by} LIMIT {int(row_cap)}"
     )
     cur = db.cursor()
     cur.execute(sql, params)

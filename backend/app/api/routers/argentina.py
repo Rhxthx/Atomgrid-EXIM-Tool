@@ -16,6 +16,8 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import StreamingResponse
 
 from app.api.deps import get_db_dep
+from app.auth.security import get_current_user
+from app.config import Settings, get_settings
 from app.database import DuckDBClient, iter_dict_rows
 from app.utils import timer
 
@@ -239,9 +241,11 @@ def argentina_shipments(
     }
 
 
-@router.get("/export", summary="Export ALL matching Argentina rows as CSV")
+@router.get("/export", summary="Export matching Argentina rows as CSV")
 def argentina_export(
     db: DuckDBClient = Depends(get_db_dep),
+    user: dict = Depends(get_current_user),
+    settings: Settings = Depends(get_settings),
     q: str | None = None,
     type: str | None = None,
     importer: str | None = None,
@@ -253,9 +257,10 @@ def argentina_export(
     sort_by: str = "date",
     sort_order: str = "desc",
 ) -> StreamingResponse:
-    """Stream every Argentina row matching the filters as a UTF-8 CSV (opens in
-    Excel). Not paginated — reflects exactly what the user searched. Capped at
-    1,000,000 rows for safety.
+    """Stream Argentina rows matching the filters as a UTF-8 CSV (opens in
+    Excel). Not paginated — reflects exactly what the user searched. Admins get
+    the full result set (capped at 1,000,000 for safety); non-admin users are
+    limited to ``EXIM_USER_EXPORT_CAP`` rows (default 50).
     """
     import csv
     import io
@@ -263,6 +268,7 @@ def argentina_export(
     if not _table_exists(db):
         raise HTTPException(status_code=404, detail="Argentina data not loaded")
 
+    row_cap = EXPORT_ROW_CAP if user["role"] == "admin" else settings.user_export_cap
     params = {
         "q": q, "type": type, "importer": importer, "origin_country": origin_country,
         "active_ingredient": active_ingredient, "date_from": date_from,
@@ -272,7 +278,7 @@ def argentina_export(
     order_col = sort_by if sort_by in SORTABLE else "date"
     order = f' ORDER BY {order_col} {"ASC" if sort_order == "asc" else "DESC"}'
     cols = ", ".join(EXPORT_COLS)
-    sql = f"SELECT {cols} FROM {TABLE}{where}{order} LIMIT {EXPORT_ROW_CAP}"
+    sql = f"SELECT {cols} FROM {TABLE}{where}{order} LIMIT {int(row_cap)}"
 
     cur = db.cursor()
     cur.execute(sql, binds)

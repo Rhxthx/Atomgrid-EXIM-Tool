@@ -3,7 +3,7 @@ import { FilterPanel } from "@/components/filters/FilterPanel";
 import { DataTable } from "@/components/table/DataTable";
 import { shipmentColumns, ShipmentDetails } from "@/components/table/shipmentColumns";
 
-import { useShipments, useStats } from "@/hooks/queries";
+import { useShipments, useStats, useExportRowLimit } from "@/hooks/queries";
 import { useUrlFilters } from "@/hooks/useUrlFilters";
 import { buildExportUrl } from "@/services/endpoints";
 
@@ -14,6 +14,7 @@ export function ShipmentsPage() {
   const { data, isLoading, isFetching } = useShipments(filters);
   const { data: stats } = useStats();
   const markets = Object.keys(stats?.reporting_countries ?? {});
+  const exportRowLimit = useExportRowLimit();
 
   return (
     <div className="space-y-4">
@@ -55,6 +56,7 @@ export function ShipmentsPage() {
         loading={isLoading || isFetching}
         csvFilename="shipments.csv"
         serverExportUrl={buildExportUrl(filters)}
+        exportRowLimit={exportRowLimit}
         renderExpanded={(row) => <ShipmentDetails row={row} />}
         serverPagination={{
           page: filters.page ?? 1,

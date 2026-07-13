@@ -144,5 +144,8 @@ class DatasetStats(BaseModel):
     hs_chapters: dict[str, int]
     reporting_countries: dict[str, int] = {}
     market_coverage: dict[str, MarketCoverage] = {}
+    # Rows a non-admin user may export at once (admins are unlimited). Lets the
+    # UI show the right limit without hardcoding it.
+    user_export_cap: int = 50
     duckdb_path: str
     query_ms: float

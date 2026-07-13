@@ -44,6 +44,11 @@ class Settings(BaseSettings):
     default_page_size: int = Field(default=50, ge=1, le=1000)
     max_page_size: int = Field(default=500, ge=1, le=10000)
 
+    # Max rows a NON-admin user may download in one CSV export. Admins always
+    # export the full filtered result set (up to the safety cap). Override with
+    # EXIM_USER_EXPORT_CAP. Mirrored to the frontend via /stats.
+    user_export_cap: int = Field(default=50, ge=1)
+
     # Comma-separated list of allowed CORS origins.  "*" disables the check.
     allow_origins: str = Field(default="*")
 

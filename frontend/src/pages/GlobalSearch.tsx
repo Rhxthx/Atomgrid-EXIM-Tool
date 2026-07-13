@@ -10,7 +10,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 
-import { useSearchShipments, useSimilar, useStats } from "@/hooks/queries";
+import { useSearchShipments, useSimilar, useStats, useExportRowLimit } from "@/hooks/queries";
 import { useUrlFilters } from "@/hooks/useUrlFilters";
 import { useDebounce } from "@/hooks/useDebounce";
 import { useSavedStore } from "@/store/savedSearches";
@@ -23,6 +23,7 @@ export function GlobalSearchPage() {
   const { data, isLoading, isFetching } = useSearchShipments(filters);
   const { data: stats } = useStats();
   const markets = Object.keys(stats?.reporting_countries ?? {});
+  const exportRowLimit = useExportRowLimit();
   const saveSearch = useSavedStore((s) => s.saveSearch);
 
   // Local input state so typing feels instant; we push to URL/filters on
@@ -140,6 +141,7 @@ export function GlobalSearchPage() {
           }
           csvFilename={`search-${(filters.q || "all").slice(0, 24)}.csv`}
           serverExportUrl={buildExportUrl(filters)}
+          exportRowLimit={exportRowLimit}
           renderExpanded={(row) => <ShipmentDetails row={row} />}
           serverPagination={{
             page: filters.page ?? 1,

@@ -75,6 +75,19 @@ export function useUsers(enabled = true) {
   });
 }
 
+/**
+ * How many rows the current user may export at once. Admins get `undefined`
+ * (unlimited — full filtered result set); everyone else gets the server-
+ * configured cap (default 50). The backend enforces the same limit; this is
+ * just for showing it in the UI. Falls back to 50 until /me and /stats load.
+ */
+export function useExportRowLimit(): number | undefined {
+  const { data: me } = useMe();
+  const { data: stats } = useStats();
+  if (me?.role === "admin") return undefined;
+  return stats?.user_export_cap ?? 50;
+}
+
 export function useSearchShipments(
   filters: FilterParams,
   opts?: { enabled?: boolean }

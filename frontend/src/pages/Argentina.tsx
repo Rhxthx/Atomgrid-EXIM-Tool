@@ -11,7 +11,7 @@ import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/utils/cn";
 
-import { useArgentinaStats, useArgentinaImports } from "@/hooks/queries";
+import { useArgentinaStats, useArgentinaImports, useExportRowLimit } from "@/hooks/queries";
 import { buildArgentinaExportUrl } from "@/services/endpoints";
 import { useDebounce } from "@/hooks/useDebounce";
 import { formatInt, formatNumber, formatDate, truncate } from "@/utils/format";
@@ -93,6 +93,7 @@ function RankCard({ title, items }: { title: string; items?: { name: string; cou
 
 export function ArgentinaPage() {
   const { data: stats, isLoading: statsLoading } = useArgentinaStats();
+  const exportRowLimit = useExportRowLimit();
 
   const [search, setSearch] = useState("");
   const [origin, setOrigin] = useState("");
@@ -244,6 +245,7 @@ export function ArgentinaPage() {
         loading={isLoading || isFetching}
         csvFilename="argentina_imports.csv"
         serverExportUrl={buildArgentinaExportUrl(filters)}
+        exportRowLimit={exportRowLimit}
         serverPagination={{
           page,
           pageSize,
