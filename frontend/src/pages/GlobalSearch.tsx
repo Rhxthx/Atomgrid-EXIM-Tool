@@ -79,8 +79,30 @@ export function GlobalSearchPage() {
         }
       />
 
-      {/* Prominent search bar — front and centre so the user always sees
-          their current query and can edit it without going up to the topbar. */}
+      <FilterPanel
+        value={filters}
+        onChange={setFilters}
+        reportingCountries={markets}
+        marketCoverage={stats?.market_coverage}
+        // Don't repeat 'q' in the filter panel — the dedicated search box below owns it.
+        fields={[
+          "reporting_country",
+          "trade_type",
+          "hs_chapter",
+          "hsn",
+          "date_from",
+          "date_to",
+          "origin_country",
+          "destination_country",
+          "importer",
+          "supplier",
+          "min_value",
+          "max_value",
+        ]}
+      />
+
+      {/* Prominent search bar — sits just above the results (below the filters)
+          so the user always sees their current query and can edit it inline. */}
       <div className="relative">
         <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
         <Input
@@ -106,28 +128,6 @@ export function GlobalSearchPage() {
           </button>
         )}
       </div>
-
-      <FilterPanel
-        value={filters}
-        onChange={setFilters}
-        reportingCountries={markets}
-        marketCoverage={stats?.market_coverage}
-        // Don't repeat 'q' in the filter panel — the big input above owns it.
-        fields={[
-          "reporting_country",
-          "trade_type",
-          "hs_chapter",
-          "hsn",
-          "date_from",
-          "date_to",
-          "origin_country",
-          "destination_country",
-          "importer",
-          "supplier",
-          "min_value",
-          "max_value",
-        ]}
-      />
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-[1fr_280px]">
         <DataTable
