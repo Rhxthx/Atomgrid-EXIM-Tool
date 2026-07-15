@@ -347,6 +347,8 @@ def _stamp_usd_currency(out: pl.DataFrame, raw: pl.DataFrame) -> pl.DataFrame:
         normalize_header(c) in {"estimatedvalue", "estimatedunit",
                                 "totalvalueinusd", "unitpriceinusd",
                                 "valuefob", "valuecif", "valuefobus",
+                                "valuecifus", "fobvalueus", "totalvaluecif",
+                                "totalvaluefob", "unitpriceus",
                                 "fobvalue", "unitrate"}
         for c in raw.columns
     )

@@ -129,6 +129,16 @@ def main() -> int:
         duckdb_path=args.output / "trade_database.duckdb",
         merged_parquet_path=args.output / "merged_data.parquet",
         sample_csv_path=args.output / "merged_data_sample.csv",
+        split_paths={
+            "IMPORT": {
+                "parquet": args.output / "merged_data_import.parquet",
+                "sample_csv": args.output / "merged_data_import_sample.csv",
+            },
+            "EXPORT": {
+                "parquet": args.output / "merged_data_export.parquet",
+                "sample_csv": args.output / "merged_data_export_sample.csv",
+            },
+        },
     )
 
     write_example_queries(args.output / "example_queries.sql")
@@ -137,6 +147,9 @@ def main() -> int:
 
     log.info("Final dataset: %s rows (after cross-file dedupe)",
              f"{db_stats['rows_after_dedupe']:,}")
+    log.info("  split: %s import rows, %s export rows",
+             f"{db_stats.get('rows_import', 0):,}",
+             f"{db_stats.get('rows_export', 0):,}")
 
     if not args.keep_shards:
         shutil.rmtree(shards_dir, ignore_errors=True)

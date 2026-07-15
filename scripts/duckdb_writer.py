@@ -49,8 +49,19 @@ def build_database(
     merged_parquet_path: Path,
     sample_csv_path: Path,
     sample_rows: int = 1000,
+    split_paths: dict[str, dict[str, Path]] | None = None,
 ) -> dict[str, int]:
-    """Build the master table from per-file shards and export artefacts."""
+    """Build the master table from per-file shards and export artefacts.
+
+    ``split_paths`` optionally requests per-direction exports keyed by
+    Trade Type, e.g.::
+
+        {"IMPORT": {"parquet": ..., "sample_csv": ...},
+         "EXPORT": {"parquet": ..., "sample_csv": ...}}
+
+    Each direction is written as its own Parquet file plus a small CSV sample,
+    filtered from the deduped master table.
+    """
     duckdb_path.parent.mkdir(parents=True, exist_ok=True)
 
     # Fresh DB each run.  Phase 2 can switch to incremental loads.
@@ -114,10 +125,40 @@ def build_database(
             f"TO {_sql_quote_path(sample_csv_path)} (FORMAT CSV, HEADER)"
         )
 
-        return {
+        result = {
             "rows_initial": row_count,
             "rows_after_dedupe": deduped,
         }
+
+        # Per-direction split exports (import / export as separate files).
+        if split_paths:
+            for trade_type, paths in split_paths.items():
+                where = f'"Trade Type" = {_sql_quote_path(trade_type)}'
+                n = con.execute(
+                    f"SELECT COUNT(*) FROM {TABLE_NAME} WHERE {where}"
+                ).fetchone()[0]
+                log.info("Writing %s split: %s rows", trade_type, f"{n:,}")
+
+                parquet_path = paths["parquet"]
+                parquet_path.parent.mkdir(parents=True, exist_ok=True)
+                con.execute(
+                    f"COPY (SELECT * FROM {TABLE_NAME} WHERE {where}) "
+                    f"TO {_sql_quote_path(parquet_path)} "
+                    "(FORMAT PARQUET, COMPRESSION ZSTD)"
+                )
+
+                sample_path = paths.get("sample_csv")
+                if sample_path is not None:
+                    sample_path.parent.mkdir(parents=True, exist_ok=True)
+                    con.execute(
+                        f"COPY (SELECT * FROM {TABLE_NAME} WHERE {where} "
+                        f"LIMIT {int(sample_rows)}) "
+                        f"TO {_sql_quote_path(sample_path)} (FORMAT CSV, HEADER)"
+                    )
+
+                result[f"rows_{trade_type.lower()}"] = n
+
+        return result
     finally:
         con.close()
 
