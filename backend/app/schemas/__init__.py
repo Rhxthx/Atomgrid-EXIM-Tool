@@ -24,4 +24,5 @@ from .analytics import (  # noqa: F401
     SupplierConcentrationRow,
     SupplierConcentrationResponse,
     DatasetStats,
+    ShipmentAggregate,
 )

@@ -3,9 +3,10 @@ import {
   getCoreRowModel,
   useReactTable,
   type ColumnDef,
+  type RowSelectionState,
   type SortingState,
 } from "@tanstack/react-table";
-import { Fragment, useMemo, useState } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import { Download, ArrowUpDown, ArrowDown, ArrowUp, Copy, ChevronRight } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -46,6 +47,32 @@ export interface DataTableProps<TData> {
    */
   exportRowLimit?: number;
   /**
+   * Enable multi-row selection: adds a checkbox column and a summary bar that
+   * totals the selected rows.  Pair with `totalMatching` + `allMatching` to
+   * also total the ENTIRE filtered set (not just the current page).
+   */
+  selectable?: boolean;
+  /**
+   * Total rows matching the CURRENT server filters.  When more rows match than
+   * are shown on the page, the summary bar offers "Select all N matching".
+   */
+  totalMatching?: number;
+  /** Controlled flag: totals reflect the ENTIRE filtered set, not the page. */
+  allMatching?: boolean;
+  onAllMatchingChange?: (active: boolean) => void;
+  /**
+   * Opaque value that clears selection + expanded rows whenever its identity
+   * changes. Pass the page's filter object so selection resets on any
+   * filter/page/sort change — robust even when the list query keeps a stable
+   * `data` reference via react-query `placeholderData`.
+   */
+  selectionResetKey?: unknown;
+  /** Renders the summary content shown in the selection bar. */
+  renderSelectionSummary?: (ctx: {
+    selectedRows: TData[];
+    allMatching: boolean;
+  }) => React.ReactNode;
+  /**
    * Optional row expander.  When provided, each row gets a chevron that
    * toggles a details panel rendered via this function.
    */
@@ -75,11 +102,71 @@ export function DataTable<TData>({
   csvFilename = "export.csv",
   serverExportUrl,
   exportRowLimit,
+  selectable = false,
+  totalMatching,
+  allMatching = false,
+  onAllMatchingChange,
+  selectionResetKey,
+  renderSelectionSummary,
   renderExpanded,
   className,
 }: DataTableProps<TData>) {
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
   const [clientSort, setClientSort] = useState<SortingState>([]);
+  const [rowSelection, setRowSelection] = useState<RowSelectionState>({});
+
+  // Keep the latest onAllMatchingChange callable without making the data-reset
+  // effect depend on it (which would re-run on every parent render).
+  const allMatchingCbRef = useRef(onAllMatchingChange);
+  allMatchingCbRef.current = onAllMatchingChange;
+
+  // Selection AND expanded rows are per-page and index-based (no getRowId), so
+  // reset both whenever the underlying rows change (page / sort / filter /
+  // refetch) — a stale index must not silently point at a different shipment.
+  // Keyed on `data` AND `selectionResetKey`: the latter (the page's filters)
+  // fires even when a list query keeps a stable `data` ref via placeholderData.
+  // State updates are guarded so this can't loop on a fresh `[]` while loading.
+  useEffect(() => {
+    setRowSelection((prev) => (Object.keys(prev).length ? {} : prev));
+    setExpanded((prev) => (Object.keys(prev).length ? {} : prev));
+    allMatchingCbRef.current?.(false);
+  }, [data, selectionResetKey]);
+
+  // Prepend a checkbox column when selection is enabled.
+  const tableColumns = useMemo<ColumnDef<TData, unknown>[]>(() => {
+    if (!selectable) return columns;
+    const selectCol: ColumnDef<TData, unknown> = {
+      id: "_select",
+      enableSorting: false,
+      enableResizing: false,
+      size: 36,
+      header: ({ table }) => (
+        <input
+          type="checkbox"
+          className="h-3.5 w-3.5 cursor-pointer accent-primary"
+          aria-label="Select all rows on this page"
+          checked={table.getIsAllPageRowsSelected()}
+          ref={(el) => {
+            if (el)
+              el.indeterminate =
+                table.getIsSomePageRowsSelected() &&
+                !table.getIsAllPageRowsSelected();
+          }}
+          onChange={table.getToggleAllPageRowsSelectedHandler()}
+        />
+      ),
+      cell: ({ row }) => (
+        <input
+          type="checkbox"
+          className="h-3.5 w-3.5 cursor-pointer accent-primary"
+          aria-label="Select row"
+          checked={row.getIsSelected()}
+          onChange={row.getToggleSelectedHandler()}
+        />
+      ),
+    };
+    return [selectCol, ...columns];
+  }, [columns, selectable]);
 
   // When the server controls sorting, lift sort state out of TanStack so it
   // doesn't fight the URL/query params.
@@ -101,9 +188,15 @@ export function DataTable<TData>({
 
   const table = useReactTable({
     data,
-    columns,
-    state: { sorting },
+    columns: tableColumns,
+    state: { sorting, rowSelection },
     onSortingChange: handleSortChange,
+    onRowSelectionChange: (updater) => {
+      setRowSelection(updater);
+      // Any manual checkbox toggle drops out of "all matching filters" mode.
+      allMatchingCbRef.current?.(false);
+    },
+    enableRowSelection: selectable,
     getCoreRowModel: getCoreRowModel(),
     manualPagination: !!serverPagination,
     manualSorting: !!serverSort,
@@ -156,6 +249,22 @@ export function DataTable<TData>({
     }
   };
 
+  const selectedRows = table.getSelectedRowModel().rows.map((r) => r.original);
+  const selectedCount = selectedRows.length;
+  const pageRowCount = table.getRowModel().rows.length;
+  const showSelectionBar = selectable && (allMatching || selectedCount > 0);
+  const canSelectAllMatching =
+    !allMatching &&
+    selectedCount > 0 &&
+    selectedCount === pageRowCount &&
+    (totalMatching ?? 0) > selectedCount;
+  const totalCols =
+    table.getVisibleLeafColumns().length + (renderExpanded ? 1 : 0) + 1;
+  const clearSelection = () => {
+    setRowSelection({});
+    onAllMatchingChange?.(false);
+  };
+
   return (
     <div className={cn("flex flex-col rounded-lg border bg-card", className)}>
       <div className="flex items-center justify-between border-b border-border px-3 py-2">
@@ -192,6 +301,37 @@ export function DataTable<TData>({
           )}
         </div>
       </div>
+
+      {showSelectionBar && (
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 border-b border-border bg-primary/5 px-3 py-2 text-xs">
+          <span className="font-medium text-foreground">
+            {allMatching
+              ? `All ${(totalMatching ?? 0).toLocaleString()} matching rows`
+              : `${selectedCount.toLocaleString()} selected`}
+          </span>
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
+            {renderSelectionSummary?.({ selectedRows, allMatching })}
+          </div>
+          <div className="ml-auto flex items-center gap-3">
+            {canSelectAllMatching && (
+              <button
+                type="button"
+                onClick={() => onAllMatchingChange?.(true)}
+                className="font-medium text-primary hover:underline"
+              >
+                Select all {(totalMatching ?? 0).toLocaleString()} matching
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={clearSelection}
+              className="text-muted-foreground hover:text-foreground hover:underline"
+            >
+              Clear
+            </button>
+          </div>
+        </div>
+      )}
 
       <div className="relative max-h-[70vh] overflow-auto">
         <table className="w-full border-separate border-spacing-0 text-sm">
@@ -243,13 +383,17 @@ export function DataTable<TData>({
 
           <tbody>
             {loading && data.length === 0 && (
-              <SkeletonRows columns={columns.length} />
+              <SkeletonRows
+                columns={
+                  table.getVisibleLeafColumns().length + (renderExpanded ? 1 : 0)
+                }
+              />
             )}
 
             {!loading && data.length === 0 && (
               <tr>
                 <td
-                  colSpan={columns.length + (renderExpanded ? 2 : 1)}
+                  colSpan={totalCols}
                   className="px-3 py-12 text-center text-sm text-muted-foreground"
                 >
                   {emptyMessage}
@@ -303,7 +447,7 @@ export function DataTable<TData>({
                   {renderExpanded && isExpanded && (
                     <tr key={`${id}-expand`}>
                       <td
-                        colSpan={columns.length + 2}
+                        colSpan={totalCols}
                         className="border-b border-border bg-muted/30 px-6 py-3"
                       >
                         {renderExpanded(row.original)}

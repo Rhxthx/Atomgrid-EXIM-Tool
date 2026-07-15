@@ -10,11 +10,22 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 
-import { useSearchShipments, useSimilar, useStats, useExportRowLimit } from "@/hooks/queries";
+import {
+  useSearchShipments,
+  useSimilar,
+  useStats,
+  useExportRowLimit,
+  useShipmentAggregate,
+} from "@/hooks/queries";
 import { useUrlFilters } from "@/hooks/useUrlFilters";
 import { useDebounce } from "@/hooks/useDebounce";
 import { useSavedStore } from "@/store/savedSearches";
 import { buildExportUrl } from "@/services/endpoints";
+import {
+  SummaryStats,
+  shipmentSelectionStats,
+  shipmentAggregateStats,
+} from "@/components/table/SelectionSummary";
 
 const COLS = shipmentColumns();
 
@@ -25,6 +36,11 @@ export function GlobalSearchPage() {
   const markets = Object.keys(stats?.reporting_countries ?? {});
   const exportRowLimit = useExportRowLimit();
   const saveSearch = useSavedStore((s) => s.saveSearch);
+
+  // Row-selection summary: "select all matching" totals the entire filtered
+  // set via the server aggregate (only fetched once the user opts in).
+  const [allMatching, setAllMatching] = useState(false);
+  const agg = useShipmentAggregate(filters, { enabled: allMatching });
 
   // Local input state so typing feels instant; we push to URL/filters on
   // Enter or after a brief debounce so the API isn't hit per keystroke.
@@ -142,6 +158,20 @@ export function GlobalSearchPage() {
           csvFilename={`search-${(filters.q || "all").slice(0, 24)}.csv`}
           serverExportUrl={buildExportUrl(filters)}
           exportRowLimit={exportRowLimit}
+          selectable
+          totalMatching={data?.meta.total ?? 0}
+          allMatching={allMatching}
+          onAllMatchingChange={setAllMatching}
+          selectionResetKey={filters}
+          renderSelectionSummary={({ selectedRows, allMatching: all }) => (
+            <SummaryStats
+              stats={
+                all
+                  ? shipmentAggregateStats(agg.data, agg.isLoading)
+                  : shipmentSelectionStats(selectedRows)
+              }
+            />
+          )}
           renderExpanded={(row) => <ShipmentDetails row={row} />}
           serverPagination={{
             page: filters.page ?? 1,

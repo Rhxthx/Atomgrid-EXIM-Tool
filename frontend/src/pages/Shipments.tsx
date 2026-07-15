@@ -1,11 +1,23 @@
+import { useState } from "react";
+
 import { PageHeader } from "@/components/PageHeader";
 import { FilterPanel } from "@/components/filters/FilterPanel";
 import { DataTable } from "@/components/table/DataTable";
 import { shipmentColumns, ShipmentDetails } from "@/components/table/shipmentColumns";
 
-import { useShipments, useStats, useExportRowLimit } from "@/hooks/queries";
+import {
+  useShipments,
+  useStats,
+  useExportRowLimit,
+  useShipmentAggregate,
+} from "@/hooks/queries";
 import { useUrlFilters } from "@/hooks/useUrlFilters";
 import { buildExportUrl } from "@/services/endpoints";
+import {
+  SummaryStats,
+  shipmentSelectionStats,
+  shipmentAggregateStats,
+} from "@/components/table/SelectionSummary";
 
 const COLS = shipmentColumns();
 
@@ -15,6 +27,8 @@ export function ShipmentsPage() {
   const { data: stats } = useStats();
   const markets = Object.keys(stats?.reporting_countries ?? {});
   const exportRowLimit = useExportRowLimit();
+  const [allMatching, setAllMatching] = useState(false);
+  const agg = useShipmentAggregate(filters, { enabled: allMatching });
 
   return (
     <div className="space-y-4">
@@ -57,6 +71,20 @@ export function ShipmentsPage() {
         csvFilename="shipments.csv"
         serverExportUrl={buildExportUrl(filters)}
         exportRowLimit={exportRowLimit}
+        selectable
+        totalMatching={data?.meta.total ?? 0}
+        allMatching={allMatching}
+        onAllMatchingChange={setAllMatching}
+        selectionResetKey={filters}
+        renderSelectionSummary={({ selectedRows, allMatching: all }) => (
+          <SummaryStats
+            stats={
+              all
+                ? shipmentAggregateStats(agg.data, agg.isLoading)
+                : shipmentSelectionStats(selectedRows)
+            }
+          />
+        )}
         renderExpanded={(row) => <ShipmentDetails row={row} />}
         serverPagination={{
           page: filters.page ?? 1,

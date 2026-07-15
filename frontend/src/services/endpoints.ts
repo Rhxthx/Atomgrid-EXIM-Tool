@@ -16,6 +16,7 @@ import type {
   KeywordResponse,
   MonthlyTrendResponse,
   PaginatedShipments,
+  ShipmentAggregate,
   SimilarResponse,
   SuggestionResponse,
   SupplierConcentrationResponse,
@@ -27,6 +28,7 @@ import type {
   QueryRequest,
 } from "@/types/query";
 import type {
+  ArgentinaAggregate,
   ArgentinaFilters,
   ArgentinaStats,
   PaginatedArgentina,
@@ -106,6 +108,22 @@ export function buildExportUrl(filters: FilterParams): string {
   const clean = cleanParams(rest);
   const qs = new URLSearchParams(clean as Record<string, string>).toString();
   return `${API_BASE_URL}/export${qs ? `?${qs}` : ""}`;
+}
+
+/**
+ * Totals (count, quantity, value, avg unit price) over the ENTIRE filtered set
+ * — powers the row-selection "select all matching" summary. Pagination/sort
+ * params are dropped since the aggregate covers everything matching.
+ */
+export async function getShipmentAggregate(
+  filters: FilterParams
+): Promise<ShipmentAggregate> {
+  const { page: _p, page_size: _ps, sort_by: _sb, sort_order: _so, ...rest } =
+    filters as Record<string, unknown>;
+  const { data } = await api.get<ShipmentAggregate>("/aggregate", {
+    params: cleanParams(rest),
+  });
+  return data;
 }
 
 export async function searchShipments(
@@ -242,6 +260,17 @@ export function buildArgentinaExportUrl(filters: ArgentinaFilters): string {
   const clean = cleanParams(rest);
   const qs = new URLSearchParams(clean as Record<string, string>).toString();
   return `${API_BASE_URL}/argentina/export${qs ? `?${qs}` : ""}`;
+}
+
+/** Totals over the ENTIRE filtered Argentina set (row-selection "all matching"). */
+export async function getArgentinaAggregate(
+  filters: ArgentinaFilters
+): Promise<ArgentinaAggregate> {
+  const { page: _p, page_size: _ps, ...rest } = filters as Record<string, unknown>;
+  const { data } = await api.get<ArgentinaAggregate>("/argentina/aggregate", {
+    params: cleanParams(rest),
+  });
+  return data;
 }
 
 // ---------------------------------------------------------------------------

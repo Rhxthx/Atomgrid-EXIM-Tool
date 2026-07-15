@@ -75,3 +75,15 @@ export interface PaginatedArgentina {
   };
   data: ArgentinaRecord[];
 }
+
+/** Totals over the ENTIRE filtered Argentina set (row-selection "all matching"). */
+export interface ArgentinaAggregate {
+  available: boolean;
+  count: number;
+  total_quantity: number | null;
+  total_fob_usd: number | null;
+  total_cif_usd: number | null;
+  avg_unit_fob_usd: number | null;
+  avg_unit_cif_usd: number | null;
+  query_ms?: number;
+}

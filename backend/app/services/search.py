@@ -231,6 +231,38 @@ def list_shipments(
     return data, total, t["ms"], applied
 
 
+def aggregate_shipments(db: DuckDBClient, f: FilterParams) -> dict:
+    """Totals over ALL rows matching the filters — not just one page.
+
+    Returns shipment count, summed Quantity and Value, and the mean per-unit
+    USD price. Uses the same WHERE builder as the paginated search so the
+    numbers reflect exactly what the user searched. ``Quantity``/``Value``/
+    ``Unit Price USD`` are stored as DOUBLE; SQL ``AVG`` ignores NULLs, so the
+    average is over rows that actually have a unit price.
+    """
+    with timer() as t:
+        where, params, _ = build_where(f, use_search_column=_has_search_column(db))
+        sql = (
+            f"SELECT COUNT(*) AS count, "
+            f"SUM({quote_ident('Quantity')}) AS total_quantity, "
+            f"SUM({quote_ident('Value')}) AS total_value, "
+            f"AVG({quote_ident('Unit Price USD')}) AS avg_unit_price_usd "
+            f"FROM {TABLE} {where}"
+        )
+        row = db.fetch_one(sql, params)
+
+    def _num(v) -> float | None:
+        return float(v) if v is not None else None
+
+    return {
+        "count": int(row[0]) if row and row[0] is not None else 0,
+        "total_quantity": _num(row[1]) if row else None,
+        "total_value": _num(row[2]) if row else None,
+        "avg_unit_price_usd": _num(row[3]) if row else None,
+        "query_ms": t["ms"],
+    }
+
+
 # Safety cap so an unfiltered export can't exhaust memory / exceed Excel's
 # ~1,048,576-row sheet limit. Filtered searches are almost always far below.
 EXPORT_ROW_CAP = 1_000_000

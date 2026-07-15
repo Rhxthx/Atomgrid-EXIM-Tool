@@ -2,6 +2,7 @@ from .search import (  # noqa: F401
     build_where,
     list_shipments,
     count_shipments,
+    aggregate_shipments,
 )
 from .analytics import (  # noqa: F401
     top_entities,

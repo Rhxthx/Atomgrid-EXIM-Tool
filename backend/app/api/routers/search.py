@@ -20,9 +20,14 @@ from app.api.deps import get_db_dep
 from app.auth.security import get_current_user
 from app.config import Settings, get_settings
 from app.database import DuckDBClient
-from app.schemas import Meta, PaginatedShipments, ShipmentRecord
+from app.schemas import Meta, PaginatedShipments, ShipmentAggregate, ShipmentRecord
 from app.schemas.filters import FilterParams, filter_params_dep
-from app.services.search import EXPORT_ROW_CAP, export_shipments_csv, list_shipments
+from app.services.search import (
+    EXPORT_ROW_CAP,
+    aggregate_shipments,
+    export_shipments_csv,
+    list_shipments,
+)
 
 log = logging.getLogger(__name__)
 
@@ -76,6 +81,22 @@ def shipments(
 ) -> PaginatedShipments:
     data, total, ms, applied = list_shipments(db, filters)
     return _build_response(data, total, ms, applied, filters.page, filters.page_size)
+
+
+@router.get(
+    "/aggregate",
+    response_model=ShipmentAggregate,
+    summary="Aggregate totals over ALL rows matching the filters",
+)
+def aggregate(
+    filters: FilterParams = Depends(filter_params_dep),
+    db: DuckDBClient = Depends(get_db_dep),
+) -> ShipmentAggregate:
+    """Count, summed quantity/value and mean per-unit USD price over the ENTIRE
+    filtered result set (not just one page). Powers the row-selection summary
+    bar's "select all matching" mode.
+    """
+    return ShipmentAggregate(**aggregate_shipments(db, filters))
 
 
 @router.get("/export", summary="Export rows matching the filters as CSV")

@@ -11,8 +11,18 @@ import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/utils/cn";
 
-import { useArgentinaStats, useArgentinaImports, useExportRowLimit } from "@/hooks/queries";
+import {
+  useArgentinaStats,
+  useArgentinaImports,
+  useExportRowLimit,
+  useArgentinaAggregate,
+} from "@/hooks/queries";
 import { buildArgentinaExportUrl } from "@/services/endpoints";
+import {
+  SummaryStats,
+  argentinaSelectionStats,
+  argentinaAggregateStats,
+} from "@/components/table/SelectionSummary";
 import { useDebounce } from "@/hooks/useDebounce";
 import { formatInt, formatNumber, formatDate, truncate } from "@/utils/format";
 import type { ArgentinaRecord } from "@/types/argentina";
@@ -146,6 +156,10 @@ export function ArgentinaPage() {
 
   const { data, isLoading, isFetching } = useArgentinaImports(filters);
 
+  // Row-selection summary: "select all matching" totals the whole filtered set.
+  const [allMatching, setAllMatching] = useState(false);
+  const agg = useArgentinaAggregate(filters, { enabled: allMatching });
+
   const dateSpan =
     stats?.date_min && stats?.date_max
       ? `${formatDate(stats.date_min)} → ${formatDate(stats.date_max)}`
@@ -246,6 +260,20 @@ export function ArgentinaPage() {
         csvFilename="argentina_imports.csv"
         serverExportUrl={buildArgentinaExportUrl(filters)}
         exportRowLimit={exportRowLimit}
+        selectable
+        totalMatching={data?.meta.total ?? 0}
+        allMatching={allMatching}
+        onAllMatchingChange={setAllMatching}
+        selectionResetKey={filters}
+        renderSelectionSummary={({ selectedRows, allMatching: all }) => (
+          <SummaryStats
+            stats={
+              all
+                ? argentinaAggregateStats(agg.data, agg.isLoading)
+                : argentinaSelectionStats(selectedRows)
+            }
+          />
+        )}
         serverPagination={{
           page,
           pageSize,

@@ -13,6 +13,7 @@ import { useMutation, useQuery, type UseQueryOptions } from "@tanstack/react-que
 import * as ep from "@/services/endpoints";
 import type { QueryRequest } from "@/types/query";
 import type {
+  ArgentinaAggregate,
   ArgentinaFilters,
   ArgentinaStats,
   PaginatedArgentina,
@@ -26,6 +27,7 @@ import type {
   KeywordResponse,
   MonthlyTrendResponse,
   PaginatedShipments,
+  ShipmentAggregate,
   SimilarResponse,
   SuggestionResponse,
   SupplierConcentrationResponse,
@@ -103,6 +105,34 @@ export function useShipments(filters: FilterParams) {
   return useQuery<PaginatedShipments>({
     queryKey: qk.shipments(filters),
     queryFn: () => ep.listShipments(filters),
+  });
+}
+
+/**
+ * Totals over the ENTIRE filtered set (row-selection "select all matching").
+ * Disabled by default — only fires once the user opts into the whole-set view.
+ */
+export function useShipmentAggregate(
+  filters: FilterParams,
+  opts?: { enabled?: boolean }
+) {
+  return useQuery<ShipmentAggregate>({
+    queryKey: ["aggregate", filters] as const,
+    queryFn: () => ep.getShipmentAggregate(filters),
+    enabled: opts?.enabled ?? false,
+    staleTime: 60 * 1000,
+  });
+}
+
+export function useArgentinaAggregate(
+  filters: ArgentinaFilters,
+  opts?: { enabled?: boolean }
+) {
+  return useQuery<ArgentinaAggregate>({
+    queryKey: ["argentina-aggregate", filters] as const,
+    queryFn: () => ep.getArgentinaAggregate(filters),
+    enabled: opts?.enabled ?? false,
+    staleTime: 60 * 1000,
   });
 }
 

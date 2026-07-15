@@ -205,6 +205,15 @@ export interface MarketCoverage {
   date_max: string | null;
 }
 
+/** Totals over the ENTIRE filtered set (row-selection summary, "all matching"). */
+export interface ShipmentAggregate {
+  count: number;
+  total_quantity: number | null;
+  total_value: number | null;
+  avg_unit_price_usd: number | null;
+  query_ms: number;
+}
+
 /* ----- Shared filter shape used everywhere ----- */
 
 export type SortOrder = "asc" | "desc";

@@ -241,6 +241,53 @@ def argentina_shipments(
     }
 
 
+@router.get("/aggregate", summary="Aggregate totals over ALL matching Argentina rows")
+def argentina_aggregate(
+    db: DuckDBClient = Depends(get_db_dep),
+    q: str | None = None,
+    type: str | None = None,
+    importer: str | None = None,
+    origin_country: str | None = None,
+    active_ingredient: str | None = None,
+    date_from: str | None = None,
+    date_to: str | None = None,
+    year: int | None = None,
+) -> dict:
+    """Count, summed quantity, summed FOB/CIF and mean per-unit FOB/CIF over the
+    ENTIRE filtered result set (not one page). Powers the row-selection summary
+    bar's "select all matching" mode. SQL AVG ignores NULLs.
+    """
+    if not _table_exists(db):
+        return {"available": False, "count": 0}
+
+    params = {
+        "q": q, "type": type, "importer": importer, "origin_country": origin_country,
+        "active_ingredient": active_ingredient, "date_from": date_from,
+        "date_to": date_to, "year": year,
+    }
+    where, binds = _where(params)
+    with timer() as t:
+        row = db.fetch_one(
+            f"SELECT COUNT(*), SUM(quantity), SUM(fob_total_usd), SUM(cif_total_usd), "
+            f"AVG(fob_unit_usd), AVG(cif_unit_usd) FROM {TABLE}{where}",
+            binds,
+        )
+
+    def _num(v) -> float | None:
+        return float(v) if v is not None else None
+
+    return {
+        "available": True,
+        "count": int(row[0]) if row and row[0] is not None else 0,
+        "total_quantity": _num(row[1]) if row else None,
+        "total_fob_usd": _num(row[2]) if row else None,
+        "total_cif_usd": _num(row[3]) if row else None,
+        "avg_unit_fob_usd": _num(row[4]) if row else None,
+        "avg_unit_cif_usd": _num(row[5]) if row else None,
+        "query_ms": t["ms"],
+    }
+
+
 @router.get("/export", summary="Export matching Argentina rows as CSV")
 def argentina_export(
     db: DuckDBClient = Depends(get_db_dep),

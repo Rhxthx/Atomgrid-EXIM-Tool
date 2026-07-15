@@ -149,3 +149,17 @@ class DatasetStats(BaseModel):
     user_export_cap: int = 50
     duckdb_path: str
     query_ms: float
+
+
+class ShipmentAggregate(BaseModel):
+    """Totals over ALL rows matching a filter set (not just one page).
+
+    Powers the row-selection summary bar: shipment count, summed quantity and
+    value, and the mean per-unit USD price. Fields are null when the filtered
+    set is empty.
+    """
+    count: int
+    total_quantity: Optional[float] = None
+    total_value: Optional[float] = None
+    avg_unit_price_usd: Optional[float] = None
+    query_ms: float = 0.0
