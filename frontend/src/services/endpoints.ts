@@ -33,6 +33,7 @@ import type {
   ArgentinaStats,
   PaginatedArgentina,
 } from "@/types/argentina";
+import type { AgBioFilters, AgBioStats, PaginatedAgBio } from "@/types/agbio";
 import type {
   AuthUser,
   CreateUserInput,
@@ -271,6 +272,30 @@ export async function getArgentinaAggregate(
     params: cleanParams(rest),
   });
   return data;
+}
+
+// ---------------------------------------------------------------------------
+// AG-Bio market (separate dataset — crop-protection market values)
+// ---------------------------------------------------------------------------
+
+export async function getAgBioStats(): Promise<AgBioStats> {
+  const { data } = await api.get<AgBioStats>("/agbio/stats");
+  return data;
+}
+
+export async function searchAgBio(filters: AgBioFilters): Promise<PaginatedAgBio> {
+  const { data } = await api.get<PaginatedAgBio>("/agbio/search", {
+    params: cleanParams(filters),
+  });
+  return data;
+}
+
+/** Direct download URL for the full filtered AG-Bio export (streamed CSV). */
+export function buildAgBioExportUrl(filters: AgBioFilters): string {
+  const { page: _p, page_size: _ps, ...rest } = filters as Record<string, unknown>;
+  const clean = cleanParams(rest);
+  const qs = new URLSearchParams(clean as Record<string, string>).toString();
+  return `${API_BASE_URL}/agbio/export${qs ? `?${qs}` : ""}`;
 }
 
 // ---------------------------------------------------------------------------

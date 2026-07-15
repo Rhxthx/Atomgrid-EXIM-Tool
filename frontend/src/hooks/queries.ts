@@ -18,6 +18,7 @@ import type {
   ArgentinaStats,
   PaginatedArgentina,
 } from "@/types/argentina";
+import type { AgBioFilters, AgBioStats, PaginatedAgBio } from "@/types/agbio";
 import type {
   CountryAnalysisResponse,
   DatasetStats,
@@ -247,6 +248,26 @@ export function useArgentinaImports(filters: ArgentinaFilters) {
   return useQuery<PaginatedArgentina>({
     queryKey: ["argentina-shipments", filters] as const,
     queryFn: () => ep.listArgentinaImports(filters),
+    placeholderData: (prev) => prev,
+  });
+}
+
+// ---------------------------------------------------------------------------
+// AG-Bio market hooks (separate dataset)
+// ---------------------------------------------------------------------------
+
+export function useAgBioStats() {
+  return useQuery<AgBioStats>({
+    queryKey: ["agbio-stats"] as const,
+    queryFn: ep.getAgBioStats,
+    staleTime: 5 * 60 * 1000,
+  });
+}
+
+export function useAgBioSearch(filters: AgBioFilters) {
+  return useQuery<PaginatedAgBio>({
+    queryKey: ["agbio-search", filters] as const,
+    queryFn: () => ep.searchAgBio(filters),
     placeholderData: (prev) => prev,
   });
 }
