@@ -115,6 +115,10 @@
     "valuefob":                   "Value",
     "valuecif":                   "Value",
     "valuefobus":                 "Value",
+    "valuecifus":                 "Value",
+    "fobvalueus":                 "Value",
+    "totalvaluecif":              "Value",
+    "totalvaluefob":              "Value",
 
     "unitrateusd":                "Unit Price USD",
     "unitpriceusd":               "Unit Price USD",
@@ -122,6 +126,7 @@
     "estimatedunit":              "Unit Price USD",
     "unitpriceinusd":             "Unit Price USD",
     "unitrate":                   "Unit Price USD",
+    "unitpriceus":                "Unit Price USD",
 
     "chaname":                    "CHA Name",
 
@@ -220,6 +225,7 @@
     "importercontactperson1",
     "importercontactperson2",
     "iecdateofestablishment",
-    "chanos"
+    "chanos",
+    "estimatedtax"
   ]
 }
