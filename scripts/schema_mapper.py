@@ -215,11 +215,13 @@ def map_dataframe(
 
     out = df.select(exprs)
     out = _prefer_usd_total_value(out, df)
+    out = _prefer_cif_value(out, df)
     out = _derive_value(out, df)
     out = _derive_unit_price_usd(out, df)
     out = _derive_destination_from_port(out, df)
     out = _use_indian_port_for_imports(out, df, file_metadata.get("trade_type"))
     out = _stamp_usd_currency(out, df)
+    out = _derive_unit_price_from_value(out, file_metadata.get("reporting_country"))
     return _consolidate_countries(
         out,
         file_metadata.get("trade_type"),
@@ -284,6 +286,42 @@ def _derive_unit_price_usd(out: pl.DataFrame, raw: pl.DataFrame) -> pl.DataFrame
     return out.with_columns(derived).drop("_fc_price")
 
 
+# Reporting-country feeds that carry a USD (CIF) total value + quantity but NO
+# per-unit price column. For these we derive the per-unit USD price as
+# Value / Quantity. Feeds that DO ship an explicit unit-price column (Peru's
+# CIF_Unit, Russia/Brazil's "Std. Unit Rate $", Kenya's "Unit Rate $", etc.)
+# are populated via the column mapping and never need this fallback.
+_UNIT_PRICE_FROM_VALUE_MARKETS = {"COLOMBIA", "AUSTRALIA", "TURKEY"}
+
+
+def _derive_unit_price_from_value(
+    out: pl.DataFrame, reporting_country: str | None
+) -> pl.DataFrame:
+    """Fill ``Unit Price USD`` = Value / Quantity for feeds that give a USD
+    total but no per-unit price (Colombia, Australia). Only fills NULLs, and
+    only where Quantity > 0, so nothing already mapped is overwritten.
+    """
+    if (reporting_country or "").upper() not in _UNIT_PRICE_FROM_VALUE_MARKETS:
+        return out
+    if not {"Unit Price USD", "Value", "Quantity"} <= set(out.columns):
+        return out
+
+    def _num(col: str) -> pl.Expr:
+        return pl.col(col).cast(pl.String).str.replace_all(",", "", literal=True).cast(pl.Float64, strict=False)
+
+    derived = (
+        pl.when(
+            pl.col("Unit Price USD").is_null()
+            & _num("Value").is_not_null()
+            & (_num("Quantity") > 0)
+        )
+        .then((_num("Value") / _num("Quantity")).round(4).cast(pl.String))
+        .otherwise(pl.col("Unit Price USD"))
+        .alias("Unit Price USD")
+    )
+    return out.with_columns(derived)
+
+
 def _derive_destination_from_port(out: pl.DataFrame, raw: pl.DataFrame) -> pl.DataFrame:
     """Fill ``Destination Country`` from ``Port of Destination`` via a port map.
 
@@ -332,6 +370,35 @@ def _prefer_usd_total_value(out: pl.DataFrame, raw: pl.DataFrame) -> pl.DataFram
     v = pl.col("_usd_total").str.strip_chars()
     v = pl.when(v.str.len_chars() == 0).then(None).otherwise(v)
     return out.with_columns(pl.coalesce([v, pl.col("Value")]).alias("Value")).drop("_usd_total")
+
+
+# Explicit USD CIF-value headers (normalised). Some feeds (e.g. Brazil's S&E
+# 3402) carry BOTH a "Value CIF $" and a "Value Fob $" that both map to Value —
+# and their FOB column is frequently blank/0, so header-order last-write-wins
+# would leave Value at 0. Prefer the CIF value whenever it's populated.
+_CIF_VALUE_KEYS = {"valuecif", "valuecifus", "valuecifusd"}
+
+
+def _prefer_cif_value(out: pl.DataFrame, raw: pl.DataFrame) -> pl.DataFrame:
+    """Force ``Value`` to the USD CIF value when the file has one and it's > 0.
+
+    Only overrides where the CIF column carries a positive number, so feeds
+    whose CIF is blank keep whatever ``Value`` already resolved to.
+    """
+    if "Value" not in out.columns:
+        return out
+    col = next((c for c in raw.columns if normalize_header(c) in _CIF_VALUE_KEYS), None)
+    if col is None:
+        return out
+    cif_raw = raw.get_column(col).cast(pl.String).str.strip_chars()
+    cif_num = cif_raw.str.replace_all(",", "", literal=True).cast(pl.Float64, strict=False)
+    out = out.with_columns(cif_raw.alias("_cif_raw"), cif_num.alias("_cif_num"))
+    return out.with_columns(
+        pl.when(pl.col("_cif_num") > 0)
+        .then(pl.col("_cif_raw"))
+        .otherwise(pl.col("Value"))
+        .alias("Value")
+    ).drop(["_cif_raw", "_cif_num"])
 
 
 def _stamp_usd_currency(out: pl.DataFrame, raw: pl.DataFrame) -> pl.DataFrame:

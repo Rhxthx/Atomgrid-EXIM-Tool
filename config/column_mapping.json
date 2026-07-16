@@ -127,6 +127,8 @@
     "unitpriceinusd":             "Unit Price USD",
     "unitrate":                   "Unit Price USD",
     "unitpriceus":                "Unit Price USD",
+    "cifunit":                    "Unit Price USD",
+    "stdunitrate":                "Unit Price USD",
 
     "chaname":                    "CHA Name",
 
