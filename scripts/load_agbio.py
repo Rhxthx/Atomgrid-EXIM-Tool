@@ -29,7 +29,9 @@ import polars as pl
 log = logging.getLogger("load_agbio")
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
-DEFAULT_XLSX = Path(r"C:\Users\Admin\Downloads\Ag bio - Compiled.xlsx")
+# Stable location OUTSIDE the pipeline source root (D:\Atomgrid\EXIM Data) so
+# main.py never ingests this market-value file into the shipments table.
+DEFAULT_XLSX = Path(r"D:\Atomgrid\AgBio\Ag bio - Compiled.xlsx")
 DEFAULT_DB = PROJECT_ROOT / "output" / "trade_database.duckdb"
 TABLE = "ag_bio_market"
 
