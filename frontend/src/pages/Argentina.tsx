@@ -169,10 +169,7 @@ export function ArgentinaPage() {
 
   return (
     <div className="space-y-4">
-      <PageHeader
-        title="Argentina Imports"
-        description="Argentine customs import data (agrochemicals) — a separate dataset from the India trade tables."
-      />
+      <PageHeader title="Argentina Imports" />
 
       {/* KPIs */}
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">

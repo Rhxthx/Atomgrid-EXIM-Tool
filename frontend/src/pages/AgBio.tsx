@@ -108,10 +108,7 @@ export function AgBioPage() {
 
   return (
     <div className="space-y-4">
-      <PageHeader
-        title="AG-Bio Market"
-        description="Crop-protection active-ingredient market values by country (AI Value, USD millions) — a separate reference dataset from the EXIM shipment tables."
-      />
+      <PageHeader title="AG-Bio Market" />
 
       {/* Search — front and centre */}
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">

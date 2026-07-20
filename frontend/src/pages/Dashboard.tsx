@@ -47,10 +47,7 @@ export function DashboardPage() {
 
   return (
     <div className="space-y-6">
-      <PageHeader
-        title="Trade Intelligence Dashboard"
-        description="Cross-section of the merged EXIM dataset — monthly trade, top entities, geography mix."
-      />
+      <PageHeader title="Trade Intelligence Dashboard" />
 
       {/* KPIs */}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
