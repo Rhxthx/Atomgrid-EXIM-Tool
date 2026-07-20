@@ -35,6 +35,7 @@ def create_user(body: CreateUserRequest) -> UserOut:
         password_hash=security.hash_password(body.password),
         role=body.role,
         must_change_password=True,   # user changes the temp password on first login
+        daily_export_limit=body.daily_export_limit,
     )
     return UserOut(**user)
 
@@ -62,6 +63,10 @@ def update_user(
     if body.new_password:
         fields["password_hash"] = security.hash_password(body.new_password)
         fields["must_change_password"] = True
+    # Applied only when explicitly sent (incl. null) so we can distinguish
+    # "leave unchanged" from "reset to the global default".
+    if "daily_export_limit" in body.model_fields_set:
+        fields["daily_export_limit"] = body.daily_export_limit
     return UserOut(**store.update_user(user_id, **fields))
 
 

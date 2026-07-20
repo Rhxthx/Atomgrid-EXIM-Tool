@@ -147,6 +147,7 @@ class DatasetStats(BaseModel):
     # Rows a non-admin user may export at once (admins are unlimited). Lets the
     # UI show the right limit without hardcoding it.
     user_export_cap: int = 50
+    user_daily_exports: int = 10
     duckdb_path: str
     query_ms: float
 

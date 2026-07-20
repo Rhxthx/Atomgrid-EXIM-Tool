@@ -16,7 +16,7 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 
-import { useMe, useUsers } from "@/hooks/queries";
+import { useMe, useUsers, useStats } from "@/hooks/queries";
 import { createUser, updateUser, deleteUser } from "@/services/endpoints";
 import { ApiError } from "@/services/api";
 import { formatDate } from "@/utils/format";
@@ -25,6 +25,8 @@ import type { AuthUser, Role } from "@/types/auth";
 export function AdminPage() {
   const { data: me } = useMe();
   const { data: users, isLoading } = useUsers(me?.role === "admin");
+  const { data: stats } = useStats();
+  const defaultDailyLimit = stats?.user_daily_exports ?? 10;
   const qc = useQueryClient();
   const [addOpen, setAddOpen] = useState(false);
   const refresh = () => qc.invalidateQueries({ queryKey: ["admin-users"] });
@@ -49,6 +51,11 @@ export function AdminPage() {
     mutationFn: (id: number) => deleteUser(id),
     onSuccess: refresh,
   });
+  const setLimit = useMutation({
+    mutationFn: ({ id, limit }: { id: number; limit: number | null }) =>
+      updateUser(id, { daily_export_limit: limit }),
+    onSuccess: refresh,
+  });
 
   const onReset = (u: AuthUser) => {
     const pw = window.prompt(`Set a new temporary password for ${u.email}:`);
@@ -57,6 +64,21 @@ export function AdminPage() {
   };
   const onDelete = (u: AuthUser) => {
     if (window.confirm(`Delete ${u.email}? This cannot be undone.`)) remove.mutate(u.id);
+  };
+  const onSetLimit = (u: AuthUser) => {
+    const cur = u.daily_export_limit;
+    const input = window.prompt(
+      `Daily downloads for ${u.email}\n\n` +
+        `Blank = use default (${defaultDailyLimit}), 0 = block, or enter a number:`,
+      cur === null || cur === undefined ? "" : String(cur)
+    );
+    if (input === null) return; // cancelled
+    const t = input.trim();
+    if (t === "") return setLimit.mutate({ id: u.id, limit: null });
+    const n = Number(t);
+    if (!Number.isInteger(n) || n < 0)
+      return window.alert("Enter a whole number ≥ 0, or leave blank for the default.");
+    setLimit.mutate({ id: u.id, limit: n });
   };
 
   return (
@@ -82,12 +104,13 @@ export function AdminPage() {
                   <th className="px-4 py-2.5">Role</th>
                   <th className="px-4 py-2.5">Status</th>
                   <th className="px-4 py-2.5">Last login</th>
+                  <th className="px-4 py-2.5">Downloads/day</th>
                   <th className="px-4 py-2.5 text-right">Actions</th>
                 </tr>
               </thead>
               <tbody>
                 {isLoading && (
-                  <tr><td colSpan={6} className="px-4 py-8 text-center text-muted-foreground">Loading…</td></tr>
+                  <tr><td colSpan={7} className="px-4 py-8 text-center text-muted-foreground">Loading…</td></tr>
                 )}
                 {(users ?? []).map((u) => (
                   <tr key={u.id} className="border-b border-border/60">
@@ -124,6 +147,25 @@ export function AdminPage() {
                       {u.last_login ? formatDate(u.last_login) : "—"}
                     </td>
                     <td className="px-4 py-2.5">
+                      {u.role === "admin" ? (
+                        <span className="text-muted-foreground">Unlimited</span>
+                      ) : (
+                        <button
+                          onClick={() => onSetLimit(u)}
+                          className="rounded px-1.5 py-0.5 text-left hover:bg-accent"
+                          title="Set daily download limit"
+                        >
+                          {u.daily_export_limit === 0 ? (
+                            <Badge variant="outline">Blocked</Badge>
+                          ) : u.daily_export_limit == null ? (
+                            <span className="text-muted-foreground">Default ({defaultDailyLimit})</span>
+                          ) : (
+                            <span>{u.daily_export_limit}/day</span>
+                          )}
+                        </button>
+                      )}
+                    </td>
+                    <td className="px-4 py-2.5">
                       <div className="flex justify-end gap-1">
                         <Button variant="ghost" size="sm" onClick={() => onReset(u)} title="Reset password">
                           <KeyRound className="h-3.5 w-3.5" />
@@ -158,13 +200,21 @@ function AddUserDialog({
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [role, setRole] = useState<Role>("user");
+  const [dailyLimit, setDailyLimit] = useState("");
   const [err, setErr] = useState<string | null>(null);
 
   const mut = useMutation({
-    mutationFn: () => createUser({ name, email: email.trim(), password, role }),
+    mutationFn: () => {
+      const dl = dailyLimit.trim();
+      return createUser({
+        name, email: email.trim(), password, role,
+        daily_export_limit: dl === "" ? undefined : Number(dl),
+      });
+    },
     onSuccess: () => {
       onDone();
-      setName(""); setEmail(""); setPassword(""); setRole("user"); setErr(null);
+      setName(""); setEmail(""); setPassword(""); setRole("user");
+      setDailyLimit(""); setErr(null);
       onOpenChange(false);
     },
     onError: (e) => setErr(e instanceof ApiError ? e.detail || e.message : "Failed to create user"),
@@ -174,6 +224,9 @@ function AddUserDialog({
     setErr(null);
     if (!name.trim() || !email.trim()) return setErr("Name and email are required.");
     if (password.length < 6) return setErr("Temporary password must be at least 6 characters.");
+    const dl = dailyLimit.trim();
+    if (dl !== "" && (!Number.isInteger(Number(dl)) || Number(dl) < 0))
+      return setErr("Daily downloads must be a whole number ≥ 0 (or blank for default).");
     mut.mutate();
   };
 
@@ -208,6 +261,11 @@ function AddUserDialog({
                 <SelectItem value="admin">Admin</SelectItem>
               </SelectContent>
             </Select>
+          </div>
+          <div className="space-y-1.5">
+            <Label>Daily downloads (optional)</Label>
+            <Input value={dailyLimit} onChange={(e) => setDailyLimit(e.target.value)}
+              placeholder="blank = default, 0 = block, or a number" />
           </div>
           {err && <p className="text-sm text-rose-500">{err}</p>}
           <div className="flex justify-end gap-2 pt-1">

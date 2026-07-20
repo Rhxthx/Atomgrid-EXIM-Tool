@@ -37,9 +37,31 @@ def init(db_path: Path) -> None:
                 is_active            INTEGER NOT NULL DEFAULT 1,
                 must_change_password INTEGER NOT NULL DEFAULT 1,
                 created_at           TEXT NOT NULL,
-                last_login           TEXT
+                last_login           TEXT,
+                daily_export_limit   INTEGER
             )
             """
+        )
+        # Migrate older auth.db files that predate daily_export_limit.
+        cols = {r[1] for r in con.execute("PRAGMA table_info(users)").fetchall()}
+        if "daily_export_limit" not in cols:
+            con.execute("ALTER TABLE users ADD COLUMN daily_export_limit INTEGER")
+
+        # Per-download audit log — also the source for daily-quota counting.
+        con.execute(
+            """
+            CREATE TABLE IF NOT EXISTS export_events (
+                id       INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id  INTEGER NOT NULL,
+                ts       TEXT NOT NULL,
+                rows     INTEGER,
+                dataset  TEXT
+            )
+            """
+        )
+        con.execute(
+            "CREATE INDEX IF NOT EXISTS idx_export_events_user_ts "
+            "ON export_events(user_id, ts)"
         )
         con.commit()
 
@@ -85,21 +107,24 @@ def list_users() -> list[dict]:
 
 
 def create_user(*, email: str, name: str, password_hash: str, role: str,
-                must_change_password: bool = True) -> dict:
+                must_change_password: bool = True,
+                daily_export_limit: Optional[int] = None) -> dict:
     with _lock, _connect() as con:
         cur = con.execute(
             """INSERT INTO users
-               (email, name, password_hash, role, is_active, must_change_password, created_at)
-               VALUES (?, ?, ?, ?, 1, ?, ?)""",
+               (email, name, password_hash, role, is_active, must_change_password,
+                created_at, daily_export_limit)
+               VALUES (?, ?, ?, ?, 1, ?, ?, ?)""",
             (email.strip(), name.strip(), password_hash, role,
-             1 if must_change_password else 0, _now()),
+             1 if must_change_password else 0, _now(), daily_export_limit),
         )
         con.commit()
         return get_by_id(cur.lastrowid)
 
 
 def update_user(user_id: int, **fields) -> Optional[dict]:
-    allowed = {"name", "role", "is_active", "password_hash", "must_change_password"}
+    allowed = {"name", "role", "is_active", "password_hash",
+               "must_change_password", "daily_export_limit"}
     sets, vals = [], []
     for k, v in fields.items():
         if k not in allowed:
@@ -127,3 +152,32 @@ def delete_user(user_id: int) -> None:
     with _lock, _connect() as con:
         con.execute("DELETE FROM users WHERE id = ?", (user_id,))
         con.commit()
+
+
+# ---------------------------------------------------------------------------
+# Export audit / daily-quota counting
+# ---------------------------------------------------------------------------
+
+def record_export(user_id: int, rows: int, dataset: str) -> None:
+    """Log one download (used for the per-user daily limit + audit trail)."""
+    with _lock, _connect() as con:
+        con.execute(
+            "INSERT INTO export_events (user_id, ts, rows, dataset) VALUES (?, ?, ?, ?)",
+            (user_id, _now(), int(rows), dataset),
+        )
+        con.commit()
+
+
+def count_exports_since(user_id: int, since_iso: str) -> int:
+    """How many downloads this user has made at/after ``since_iso`` (UTC ISO).
+
+    ``ts`` is stored as UTC ISO, so a lexicographic ``>=`` compare is also a
+    chronological one.
+    """
+    with _connect() as con:
+        return int(
+            con.execute(
+                "SELECT COUNT(*) FROM export_events WHERE user_id = ? AND ts >= ?",
+                (user_id, since_iso),
+            ).fetchone()[0]
+        )

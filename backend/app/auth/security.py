@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import logging
 from datetime import datetime, timedelta, timezone
+from zoneinfo import ZoneInfo
 
 import bcrypt
 import jwt
@@ -15,6 +16,9 @@ log = logging.getLogger(__name__)
 
 COOKIE_NAME = "exim_session"
 _ALGO = "HS256"
+
+# Daily export quotas reset at local midnight in this zone.
+_QUOTA_TZ = ZoneInfo("Asia/Kolkata")
 
 
 # ---------------------------------------------------------------------------
@@ -100,6 +104,61 @@ def require_admin(user: dict = Depends(get_current_user)) -> dict:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN,
                             detail="Admin access required")
     return user
+
+
+# ---------------------------------------------------------------------------
+# Daily export quota
+# ---------------------------------------------------------------------------
+def _quota_day_bounds() -> tuple[str, str]:
+    """Return (utc_iso_of_today's_local_midnight, iso_of_next_local_midnight)."""
+    now_local = datetime.now(_QUOTA_TZ)
+    start_local = now_local.replace(hour=0, minute=0, second=0, microsecond=0)
+    next_local = start_local + timedelta(days=1)
+    return start_local.astimezone(timezone.utc).isoformat(), next_local.isoformat()
+
+
+def effective_daily_limit(user: dict, settings: Settings) -> int | None:
+    """Downloads/day allowed for this user. ``None`` means unlimited (admins).
+
+    A per-user ``daily_export_limit`` (incl. 0 = blocked) overrides the global
+    default; ``None`` on the record falls back to the configured default.
+    """
+    if user.get("role") == "admin":
+        return None
+    lim = user.get("daily_export_limit")
+    return settings.user_daily_exports if lim is None else int(lim)
+
+
+def export_quota(user: dict, settings: Settings) -> dict:
+    """Current export-quota state for the UI / enforcement."""
+    limit = effective_daily_limit(user, settings)
+    start_utc, resets_at = _quota_day_bounds()
+    used = store.count_exports_since(user["id"], start_utc)
+    if limit is None:
+        return {"unlimited": True, "limit": None, "used": used,
+                "remaining": None, "resets_at": resets_at}
+    return {"unlimited": False, "limit": limit, "used": used,
+            "remaining": max(0, limit - used), "resets_at": resets_at}
+
+
+def check_and_record_export(user: dict, settings: Settings, *, rows: int,
+                            dataset: str) -> None:
+    """Enforce the daily limit for non-admins, then log the download.
+
+    Raises HTTP 429 when the user is already at their limit. Admins are never
+    blocked but their downloads are still logged for the audit trail.
+    """
+    limit = effective_daily_limit(user, settings)
+    if limit is not None:
+        start_utc, resets_at = _quota_day_bounds()
+        used = store.count_exports_since(user["id"], start_utc)
+        if used >= limit:
+            raise HTTPException(
+                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                detail=(f"Daily download limit reached ({limit} per day). "
+                        "It resets at midnight IST."),
+            )
+    store.record_export(user["id"], rows=rows, dataset=dataset)
 
 
 # ---------------------------------------------------------------------------

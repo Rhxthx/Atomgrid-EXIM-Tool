@@ -24,6 +24,7 @@ import type {
   AgBioStats,
   PaginatedAgBio,
 } from "@/types/agbio";
+import type { ExportQuota } from "@/types/auth";
 import type {
   CountryAnalysisResponse,
   DatasetStats,
@@ -94,6 +95,19 @@ export function useExportRowLimit(): number | undefined {
   const { data: stats } = useStats();
   if (me?.role === "admin") return undefined;
   return stats?.user_export_cap ?? 50;
+}
+
+/**
+ * The current user's daily download quota (used + remaining, reset time).
+ * Admins come back `unlimited`. Short staleTime so the count updates soon
+ * after a download.
+ */
+export function useExportQuota() {
+  return useQuery<ExportQuota>({
+    queryKey: ["export-quota"] as const,
+    queryFn: ep.getExportQuota,
+    staleTime: 30 * 1000,
+  });
 }
 
 export function useSearchShipments(

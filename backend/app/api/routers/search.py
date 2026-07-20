@@ -17,7 +17,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import StreamingResponse
 
 from app.api.deps import get_db_dep
-from app.auth.security import get_current_user
+from app.auth.security import check_and_record_export, get_current_user
 from app.config import Settings, get_settings
 from app.database import DuckDBClient
 from app.schemas import Meta, PaginatedShipments, ShipmentAggregate, ShipmentRecord
@@ -113,6 +113,9 @@ def export_csv(
     users are limited to ``EXIM_USER_EXPORT_CAP`` rows (default 50).
     """
     row_cap = EXPORT_ROW_CAP if user["role"] == "admin" else settings.user_export_cap
+    # Enforce the per-user daily download quota (raises 429 if exceeded) and log
+    # the download. Admins are unlimited but still logged.
+    check_and_record_export(user, settings, rows=row_cap, dataset="india")
     stream = export_shipments_csv(db, filters, row_cap=row_cap)
     return StreamingResponse(
         stream,

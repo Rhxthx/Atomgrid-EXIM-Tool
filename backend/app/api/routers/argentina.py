@@ -16,7 +16,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import StreamingResponse
 
 from app.api.deps import get_db_dep
-from app.auth.security import get_current_user
+from app.auth.security import check_and_record_export, get_current_user
 from app.config import Settings, get_settings
 from app.database import DuckDBClient, iter_dict_rows
 from app.utils import timer
@@ -316,6 +316,8 @@ def argentina_export(
         raise HTTPException(status_code=404, detail="Argentina data not loaded")
 
     row_cap = EXPORT_ROW_CAP if user["role"] == "admin" else settings.user_export_cap
+    # Enforce the per-user daily download quota (429 if exceeded) + log it.
+    check_and_record_export(user, settings, rows=row_cap, dataset="argentina")
     params = {
         "q": q, "type": type, "importer": importer, "origin_country": origin_country,
         "active_ingredient": active_ingredient, "date_from": date_from,

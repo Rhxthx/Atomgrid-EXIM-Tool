@@ -42,6 +42,7 @@ import type {
 import type {
   AuthUser,
   CreateUserInput,
+  ExportQuota,
   UpdateUserInput,
 } from "@/types/auth";
 
@@ -65,6 +66,11 @@ export async function logout(): Promise<void> {
 
 export async function getMe(): Promise<AuthUser> {
   const { data } = await api.get<AuthUser>("/auth/me");
+  return data;
+}
+
+export async function getExportQuota(): Promise<ExportQuota> {
+  const { data } = await api.get<ExportQuota>("/auth/me/quota");
   return data;
 }
 

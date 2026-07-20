@@ -15,6 +15,7 @@ import {
   useSimilar,
   useStats,
   useExportRowLimit,
+  useExportQuota,
   useShipmentAggregate,
 } from "@/hooks/queries";
 import { useUrlFilters } from "@/hooks/useUrlFilters";
@@ -35,6 +36,7 @@ export function GlobalSearchPage() {
   const { data: stats } = useStats();
   const markets = Object.keys(stats?.reporting_countries ?? {});
   const exportRowLimit = useExportRowLimit();
+  const quota = useExportQuota();
   const saveSearch = useSavedStore((s) => s.saveSearch);
 
   // Row-selection summary: "select all matching" totals the entire filtered
@@ -158,6 +160,8 @@ export function GlobalSearchPage() {
           csvFilename={`search-${(filters.q || "all").slice(0, 24)}.csv`}
           serverExportUrl={buildExportUrl(filters)}
           exportRowLimit={exportRowLimit}
+          downloadsLeft={quota.data?.unlimited ? null : quota.data?.remaining ?? null}
+          onExported={() => window.setTimeout(() => quota.refetch(), 1500)}
           selectable
           totalMatching={data?.meta.total ?? 0}
           allMatching={allMatching}

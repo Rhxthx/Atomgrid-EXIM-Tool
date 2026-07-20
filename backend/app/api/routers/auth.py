@@ -47,6 +47,14 @@ def me(user: dict = Depends(security.get_current_user)) -> UserOut:
     return _public(user)
 
 
+@router.get("/me/quota", summary="Current user's daily export quota")
+def me_quota(
+    user: dict = Depends(security.get_current_user),
+    settings: Settings = Depends(get_settings),
+) -> dict:
+    return security.export_quota(user, settings)
+
+
 @router.post("/change-password", response_model=UserOut, summary="Change own password")
 def change_password(
     body: ChangePasswordRequest,

@@ -195,6 +195,7 @@ export interface DatasetStats {
   market_coverage: Record<string, MarketCoverage>;
   /** Rows a non-admin user may export at once (admins are unlimited). */
   user_export_cap: number;
+  user_daily_exports: number;
   duckdb_path: string;
   query_ms: number;
 }

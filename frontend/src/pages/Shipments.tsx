@@ -9,6 +9,7 @@ import {
   useShipments,
   useStats,
   useExportRowLimit,
+  useExportQuota,
   useShipmentAggregate,
 } from "@/hooks/queries";
 import { useUrlFilters } from "@/hooks/useUrlFilters";
@@ -27,6 +28,7 @@ export function ShipmentsPage() {
   const { data: stats } = useStats();
   const markets = Object.keys(stats?.reporting_countries ?? {});
   const exportRowLimit = useExportRowLimit();
+  const quota = useExportQuota();
   const [allMatching, setAllMatching] = useState(false);
   const agg = useShipmentAggregate(filters, { enabled: allMatching });
 
@@ -71,6 +73,8 @@ export function ShipmentsPage() {
         csvFilename="shipments.csv"
         serverExportUrl={buildExportUrl(filters)}
         exportRowLimit={exportRowLimit}
+        downloadsLeft={quota.data?.unlimited ? null : quota.data?.remaining ?? null}
+        onExported={() => window.setTimeout(() => quota.refetch(), 1500)}
         selectable
         totalMatching={data?.meta.total ?? 0}
         allMatching={allMatching}

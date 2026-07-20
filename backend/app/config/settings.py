@@ -49,6 +49,12 @@ class Settings(BaseSettings):
     # EXIM_USER_EXPORT_CAP. Mirrored to the frontend via /stats.
     user_export_cap: int = Field(default=50, ge=1)
 
+    # Default max CSV downloads a NON-admin user may run per day (each is
+    # <= user_export_cap rows). Per-user overrides live on the user record
+    # (daily_export_limit); this is the fallback. 0 blocks downloads; admins
+    # are unlimited. Override with EXIM_USER_DAILY_EXPORTS. Mirrored via /stats.
+    user_daily_exports: int = Field(default=10, ge=0)
+
     # Comma-separated list of allowed CORS origins.  "*" disables the check.
     allow_origins: str = Field(default="*")
 

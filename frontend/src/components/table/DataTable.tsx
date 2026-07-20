@@ -49,6 +49,12 @@ export interface DataTableProps<TData> {
   /** Hide the export/CSV button entirely (datasets where download is
    * intentionally not offered). */
   hideExport?: boolean;
+  /** Remaining downloads today for the current user (null/undefined = unlimited
+   * or not tracked). When 0, the export button is disabled. */
+  downloadsLeft?: number | null;
+  /** Called right after a server export is triggered, so the caller can refresh
+   * the quota count. */
+  onExported?: () => void;
   /**
    * Enable multi-row selection: adds a checkbox column and a summary bar that
    * totals the selected rows.  Pair with `totalMatching` + `allMatching` to
@@ -106,6 +112,8 @@ export function DataTable<TData>({
   serverExportUrl,
   exportRowLimit,
   hideExport = false,
+  downloadsLeft,
+  onExported,
   selectable = false,
   totalMatching,
   allMatching = false,
@@ -234,14 +242,17 @@ export function DataTable<TData>({
     [table, csvFilename]
   );
 
+  const outOfDownloads = typeof downloadsLeft === "number" && downloadsLeft <= 0;
+
   const exportAll = () => {
-    if (!serverExportUrl) return;
+    if (!serverExportUrl || outOfDownloads) return;
     const a = document.createElement("a");
     a.href = serverExportUrl;
     a.rel = "noopener";
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
+    onExported?.();
   };
 
   const copyRow = async (row: TData) => {
@@ -285,17 +296,28 @@ export function DataTable<TData>({
               variant="outline"
               size="sm"
               onClick={exportAll}
-              disabled={loading || (serverPagination?.total ?? data.length) === 0}
+              disabled={
+                loading ||
+                (serverPagination?.total ?? data.length) === 0 ||
+                outOfDownloads
+              }
               title={
-                exportRowLimit
-                  ? `Download the first ${exportRowLimit.toLocaleString()} rows matching your filters (opens in Excel). Full export is available to administrators.`
+                outOfDownloads
+                  ? "You've used all your downloads for today. Resets at midnight IST."
+                  : exportRowLimit
+                  ? `Download the first ${exportRowLimit.toLocaleString()} rows matching your filters (opens in Excel).${
+                      typeof downloadsLeft === "number" ? ` ${downloadsLeft} download(s) left today.` : ""
+                    } Full export is available to administrators.`
                   : "Download all rows matching the current filters (opens in Excel)"
               }
             >
               <Download className="mr-1.5 h-3.5 w-3.5" />
-              {exportRowLimit
-                ? `Export to Excel (max ${exportRowLimit.toLocaleString()})`
-                : "Export to Excel"}
+              {outOfDownloads
+                ? "Daily limit reached"
+                : (exportRowLimit
+                    ? `Export to Excel (max ${exportRowLimit.toLocaleString()})`
+                    : "Export to Excel") +
+                  (typeof downloadsLeft === "number" ? ` · ${downloadsLeft} left` : "")}
             </Button>
           ) : (
             <Button variant="outline" size="sm" onClick={exportCsv} disabled={loading || data.length === 0}>

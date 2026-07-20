@@ -117,6 +117,7 @@ def stats(
         reporting_countries=reporting_countries,
         market_coverage=market_coverage,
         user_export_cap=settings.user_export_cap,
+        user_daily_exports=settings.user_daily_exports,
         duckdb_path=str(settings.duckdb_path),
         query_ms=t["ms"],
     )

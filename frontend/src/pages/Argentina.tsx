@@ -15,6 +15,7 @@ import {
   useArgentinaStats,
   useArgentinaImports,
   useExportRowLimit,
+  useExportQuota,
   useArgentinaAggregate,
 } from "@/hooks/queries";
 import { buildArgentinaExportUrl } from "@/services/endpoints";
@@ -104,6 +105,7 @@ function RankCard({ title, items }: { title: string; items?: { name: string; cou
 export function ArgentinaPage() {
   const { data: stats, isLoading: statsLoading } = useArgentinaStats();
   const exportRowLimit = useExportRowLimit();
+  const quota = useExportQuota();
 
   const [search, setSearch] = useState("");
   const [origin, setOrigin] = useState("");
@@ -260,6 +262,8 @@ export function ArgentinaPage() {
         csvFilename="argentina_imports.csv"
         serverExportUrl={buildArgentinaExportUrl(filters)}
         exportRowLimit={exportRowLimit}
+        downloadsLeft={quota.data?.unlimited ? null : quota.data?.remaining ?? null}
+        onExported={() => window.setTimeout(() => quota.refetch(), 1500)}
         selectable
         totalMatching={data?.meta.total ?? 0}
         allMatching={allMatching}
