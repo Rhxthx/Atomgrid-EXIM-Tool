@@ -13,12 +13,9 @@ from __future__ import annotations
 import logging
 import math
 
-from fastapi import APIRouter, Depends, HTTPException, Query
-from fastapi.responses import StreamingResponse
+from fastapi import APIRouter, Depends, Query
 
 from app.api.deps import get_db_dep
-from app.auth.security import get_current_user
-from app.config import Settings, get_settings
 from app.database import DuckDBClient, iter_dict_rows
 from app.utils import timer
 
@@ -37,8 +34,6 @@ CROP_COLS = [
 LIST_COLS = ["product", "type", "country"] + CROP_COLS + ["total_usd_m"]
 
 SORTABLE = {"product", "type", "country", "total_usd_m"}
-
-EXPORT_ROW_CAP = 1_000_000
 
 
 def _table_exists(db: DuckDBClient) -> bool:
@@ -157,65 +152,53 @@ def agbio_search(
     }
 
 
-@router.get("/export", summary="Export matching AG-Bio rows as CSV")
-def agbio_export(
+@router.get("/breakdown", summary="Top products & countries by value over the current filter")
+def agbio_breakdown(
     db: DuckDBClient = Depends(get_db_dep),
-    user: dict = Depends(get_current_user),
-    settings: Settings = Depends(get_settings),
-    q: str | None = None,
-    product: str | None = None,
-    country: str | None = None,
-    type: str | None = None,
-    sort_by: str = "total_usd_m",
-    sort_order: str = "desc",
-) -> StreamingResponse:
-    """Stream AG-Bio rows matching the filters as a UTF-8 CSV. Admins get the
-    full result set (capped at 1,000,000 for safety); non-admin users are
-    limited to ``EXIM_USER_EXPORT_CAP`` rows (default 50).
+    q: str | None = Query(None),
+    product: str | None = Query(None, description="Product substring — narrows the ranking to this product"),
+    country: str | None = Query(None, description="Country substring — narrows the ranking to this country"),
+    type: str | None = Query(None),
+    limit: int = Query(10, ge=1, le=50),
+) -> dict:
+    """Dynamic rankings that follow the current search:
+
+    - filter by a COUNTRY -> ``top_products`` lists that country's biggest
+      products by AI value (USD millions);
+    - filter by a PRODUCT -> ``top_countries`` lists that product's biggest
+      markets;
+    - no filter -> both are the global Top-N.
+
+    Both lists are always returned (computed over the same WHERE); the frontend
+    decides which to show based on what the user searched.
     """
-    import csv
-    import io
-
     if not _table_exists(db):
-        raise HTTPException(status_code=404, detail="AG-Bio data not loaded")
-
-    row_cap = EXPORT_ROW_CAP if user["role"] == "admin" else settings.user_export_cap
+        return {"available": False, "top_products": [], "top_countries": []}
 
     params = {"q": q, "product": product, "country": country, "type": type}
     where, binds = _where(params)
-    order_col = sort_by if sort_by in SORTABLE else "total_usd_m"
-    order = f' ORDER BY {order_col} {"ASC" if sort_order == "asc" else "DESC"} NULLS LAST'
-    cols = ", ".join(LIST_COLS)
-    sql = f"SELECT {cols} FROM {TABLE}{where}{order} LIMIT {int(row_cap)}"
 
-    cur = db.cursor()
-    cur.execute(sql, binds)
-    header = [d[0] for d in cur.description]
+    with timer() as t:
+        top_products = [
+            {"name": r[0], "total_usd_m": float(r[1] or 0)}
+            for r in db.fetch_all(
+                f"SELECT product, sum(total_usd_m) FROM {TABLE}{where} "
+                f"GROUP BY 1 ORDER BY 2 DESC NULLS LAST LIMIT ?",
+                binds + [limit],
+            )
+        ]
+        top_countries = [
+            {"name": r[0], "total_usd_m": float(r[1] or 0)}
+            for r in db.fetch_all(
+                f"SELECT country, sum(total_usd_m) FROM {TABLE}{where} "
+                f"GROUP BY 1 ORDER BY 2 DESC NULLS LAST LIMIT ?",
+                binds + [limit],
+            )
+        ]
 
-    def _drain(buf) -> str:
-        s = buf.getvalue()
-        buf.seek(0)
-        buf.truncate(0)
-        return s
-
-    def _rows():
-        buf = io.StringIO()
-        writer = csv.writer(buf)
-        yield "﻿"                    # BOM for Excel
-        writer.writerow(header)
-        yield _drain(buf)
-        while True:
-            batch = cur.fetchmany(10_000)
-            if not batch:
-                break
-            for row in batch:
-                writer.writerow(["" if v is None else v for v in row])
-            yield _drain(buf)
-
-    return StreamingResponse(
-        _rows(),
-        media_type="text/csv; charset=utf-8",
-        headers={
-            "Content-Disposition": 'attachment; filename="agbio_market_export.csv"'
-        },
-    )
+    return {
+        "available": True,
+        "top_products": top_products,
+        "top_countries": top_countries,
+        "query_ms": t["ms"],
+    }

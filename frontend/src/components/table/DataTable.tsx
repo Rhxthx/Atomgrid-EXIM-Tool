@@ -46,6 +46,9 @@ export interface DataTableProps<TData> {
    * (full export).
    */
   exportRowLimit?: number;
+  /** Hide the export/CSV button entirely (datasets where download is
+   * intentionally not offered). */
+  hideExport?: boolean;
   /**
    * Enable multi-row selection: adds a checkbox column and a summary bar that
    * totals the selected rows.  Pair with `totalMatching` + `allMatching` to
@@ -102,6 +105,7 @@ export function DataTable<TData>({
   csvFilename = "export.csv",
   serverExportUrl,
   exportRowLimit,
+  hideExport = false,
   selectable = false,
   totalMatching,
   allMatching = false,
@@ -276,7 +280,7 @@ export function DataTable<TData>({
             : `${data.length.toLocaleString()} rows`}
         </div>
         <div className="flex items-center gap-1">
-          {serverExportUrl ? (
+          {hideExport ? null : serverExportUrl ? (
             <Button
               variant="outline"
               size="sm"

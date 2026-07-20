@@ -46,6 +46,15 @@ export interface AgBioRecord {
   total_usd_m: number | null;
 }
 
+/** Dynamic rankings that follow the current search (country -> top products,
+ * product -> top countries, empty -> both global). */
+export interface AgBioBreakdown {
+  available: boolean;
+  top_products: AgBioRankItem[];
+  top_countries: AgBioRankItem[];
+  query_ms?: number;
+}
+
 export interface AgBioFilters {
   q?: string;
   product?: string;

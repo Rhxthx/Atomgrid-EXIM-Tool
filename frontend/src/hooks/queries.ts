@@ -18,7 +18,12 @@ import type {
   ArgentinaStats,
   PaginatedArgentina,
 } from "@/types/argentina";
-import type { AgBioFilters, AgBioStats, PaginatedAgBio } from "@/types/agbio";
+import type {
+  AgBioBreakdown,
+  AgBioFilters,
+  AgBioStats,
+  PaginatedAgBio,
+} from "@/types/agbio";
 import type {
   CountryAnalysisResponse,
   DatasetStats,
@@ -269,6 +274,16 @@ export function useAgBioSearch(filters: AgBioFilters) {
     queryKey: ["agbio-search", filters] as const,
     queryFn: () => ep.searchAgBio(filters),
     placeholderData: (prev) => prev,
+  });
+}
+
+/** Dynamic Top-products / Top-countries rankings for the current search. */
+export function useAgBioBreakdown(filters: AgBioFilters) {
+  return useQuery<AgBioBreakdown>({
+    queryKey: ["agbio-breakdown", filters] as const,
+    queryFn: () => ep.getAgBioBreakdown(filters),
+    placeholderData: (prev) => prev,
+    staleTime: 60 * 1000,
   });
 }
 

@@ -33,7 +33,12 @@ import type {
   ArgentinaStats,
   PaginatedArgentina,
 } from "@/types/argentina";
-import type { AgBioFilters, AgBioStats, PaginatedAgBio } from "@/types/agbio";
+import type {
+  AgBioBreakdown,
+  AgBioFilters,
+  AgBioStats,
+  PaginatedAgBio,
+} from "@/types/agbio";
 import type {
   AuthUser,
   CreateUserInput,
@@ -290,12 +295,15 @@ export async function searchAgBio(filters: AgBioFilters): Promise<PaginatedAgBio
   return data;
 }
 
-/** Direct download URL for the full filtered AG-Bio export (streamed CSV). */
-export function buildAgBioExportUrl(filters: AgBioFilters): string {
-  const { page: _p, page_size: _ps, ...rest } = filters as Record<string, unknown>;
-  const clean = cleanParams(rest);
-  const qs = new URLSearchParams(clean as Record<string, string>).toString();
-  return `${API_BASE_URL}/agbio/export${qs ? `?${qs}` : ""}`;
+/** Dynamic rankings that follow the current search (country -> top products,
+ * product -> top countries, empty -> both global top-N). */
+export async function getAgBioBreakdown(filters: AgBioFilters): Promise<AgBioBreakdown> {
+  const { page: _p, page_size: _ps, sort_by: _sb, sort_order: _so, ...rest } =
+    filters as Record<string, unknown>;
+  const { data } = await api.get<AgBioBreakdown>("/agbio/breakdown", {
+    params: cleanParams(rest),
+  });
+  return data;
 }
 
 // ---------------------------------------------------------------------------
