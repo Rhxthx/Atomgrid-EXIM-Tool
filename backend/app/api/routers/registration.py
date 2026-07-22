@@ -28,9 +28,18 @@ TABLE = "global_registration"
 # original country-specific field for the expand/details panel.
 LIST_COLS = [
     "country", "product", "active_ingredient", "concentration", "company",
-    "status", "registration_no", "formulation_type", "origin", "raw_json",
+    "status", "registration_no", "formulation_type", "category", "origin", "raw_json",
 ]
-SORTABLE = {"country", "product", "active_ingredient", "company", "status", "registration_no"}
+SORTABLE = {"country", "product", "active_ingredient", "company", "status",
+            "registration_no", "category"}
+
+# Operators for the active-ingredient logical builder (op|value pairs).
+_AI_OPS = {
+    "contains":    ("active_ingredient ILIKE ?", lambda v: f"%{v}%"),
+    "notcontains": ("(active_ingredient IS NULL OR active_ingredient NOT ILIKE ?)", lambda v: f"%{v}%"),
+    "equals":      ("lower(active_ingredient) = lower(?)", lambda v: v),
+    "notequals":   ("(active_ingredient IS NULL OR lower(active_ingredient) <> lower(?))", lambda v: v),
+}
 
 
 def _table_exists(db: DuckDBClient) -> bool:
@@ -61,6 +70,28 @@ def _where(params: dict) -> tuple[str, list]:
     if params.get("country"):
         clauses.append("country = ?")
         binds.append(params["country"])
+    if params.get("category"):
+        clauses.append("category = ?")
+        binds.append(params["category"])
+
+    # Active-ingredient logical builder: a list of "op|value" conditions joined
+    # by AND / OR (each condition may itself be a negation via not-contains /
+    # not-equals). The whole group is ANDed with the other filters.
+    conds = params.get("ai_conds") or []
+    join = "OR" if str(params.get("ai_join", "and")).lower() == "or" else "AND"
+    sub_clauses: list[str] = []
+    sub_binds: list = []
+    for cond in conds:
+        op, _, val = str(cond).partition("|")
+        op, val = op.strip().lower(), val.strip()
+        if not val or op not in _AI_OPS:
+            continue
+        sql, mk = _AI_OPS[op]
+        sub_clauses.append(sql)
+        sub_binds.append(mk(val))
+    if sub_clauses:
+        clauses.append("(" + f" {join} ".join(sub_clauses) + ")")
+        binds.extend(sub_binds)
 
     where = (" WHERE " + " AND ".join(clauses)) if clauses else ""
     return where, binds
@@ -94,6 +125,13 @@ def registration_stats(db: DuckDBClient = Depends(get_db_dep)) -> dict:
     }
 
 
+def _filter_params(q, active_ingredient, product, company, country, category,
+                   ai, ai_join) -> dict:
+    return {"q": q, "active_ingredient": active_ingredient, "product": product,
+            "company": company, "country": country, "category": category,
+            "ai_conds": ai, "ai_join": ai_join}
+
+
 @router.get("/search", summary="Search registrations by ingredient/product/company/country")
 def registration_search(
     db: DuckDBClient = Depends(get_db_dep),
@@ -102,6 +140,9 @@ def registration_search(
     product: str | None = Query(None, description="Product / trade-name substring"),
     company: str | None = Query(None, description="Company / registrant substring"),
     country: str | None = Query(None, description="Exact country name"),
+    category: str | None = Query(None, description="Technical / Formulation / Unknown"),
+    ai: list[str] | None = Query(None, description="AI conditions as 'op|value' (op: contains/notcontains/equals/notequals)"),
+    ai_join: str = Query("and", description="Join AI conditions with 'and' or 'or'"),
     sort_by: str = Query("country", description="Sort column"),
     sort_order: str = Query("asc", pattern="^(asc|desc)$"),
     page: int = Query(1, ge=1),
@@ -111,8 +152,8 @@ def registration_search(
         return {"meta": {"total": 0, "page": page, "page_size": page_size,
                          "total_pages": 0, "available": False}, "data": []}
 
-    params = {"q": q, "active_ingredient": active_ingredient, "product": product,
-              "company": company, "country": country}
+    params = _filter_params(q, active_ingredient, product, company, country,
+                            category, ai, ai_join)
     where, binds = _where(params)
     order_col = sort_by if sort_by in SORTABLE else "country"
     order = f' ORDER BY {order_col} {"ASC" if sort_order == "asc" else "DESC"} NULLS LAST'
@@ -135,4 +176,45 @@ def registration_search(
             "available": True,
         },
         "data": data,
+    }
+
+
+@router.get("/breakdown", summary="Registration/country counts for the current filters (dynamic KPIs)")
+def registration_breakdown(
+    db: DuckDBClient = Depends(get_db_dep),
+    q: str | None = Query(None),
+    active_ingredient: str | None = Query(None),
+    product: str | None = Query(None),
+    company: str | None = Query(None),
+    country: str | None = Query(None),
+    category: str | None = Query(None),
+    ai: list[str] | None = Query(None),
+    ai_join: str = Query("and"),
+) -> dict:
+    """Totals for whatever the user is searching: number of registrations,
+    number of distinct countries, and the matching countries with their counts.
+    """
+    if not _table_exists(db):
+        return {"available": False, "total": 0, "distinct_countries": 0, "countries": []}
+
+    params = _filter_params(q, active_ingredient, product, company, country,
+                            category, ai, ai_join)
+    where, binds = _where(params)
+
+    with timer() as t:
+        total = int(db.fetch_one(f"SELECT count(*) FROM {TABLE}{where}", binds)[0])
+        countries = [
+            {"name": r[0], "count": int(r[1])}
+            for r in db.fetch_all(
+                f"SELECT country, count(*) FROM {TABLE}{where} "
+                f"GROUP BY 1 ORDER BY 2 DESC", binds
+            )
+        ]
+
+    return {
+        "available": True,
+        "total": total,
+        "distinct_countries": len(countries),
+        "countries": countries,
+        "query_ms": t["ms"],
     }

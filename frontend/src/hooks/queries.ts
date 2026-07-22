@@ -27,6 +27,7 @@ import type {
 import type { ExportQuota } from "@/types/auth";
 import type {
   PaginatedRegistration,
+  RegistrationBreakdown,
   RegistrationFilters,
   RegistrationStats,
 } from "@/types/registration";
@@ -323,6 +324,16 @@ export function useRegistrationSearch(filters: RegistrationFilters) {
     queryKey: ["registration-search", filters] as const,
     queryFn: () => ep.searchRegistration(filters),
     placeholderData: (prev) => prev,
+  });
+}
+
+/** Filter-aware totals (registrations + countries) for the dynamic KPIs. */
+export function useRegistrationBreakdown(filters: RegistrationFilters) {
+  return useQuery<RegistrationBreakdown>({
+    queryKey: ["registration-breakdown", filters] as const,
+    queryFn: () => ep.getRegistrationBreakdown(filters),
+    placeholderData: (prev) => prev,
+    staleTime: 60 * 1000,
   });
 }
 

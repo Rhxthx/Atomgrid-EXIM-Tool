@@ -41,6 +41,7 @@ import type {
 } from "@/types/agbio";
 import type {
   PaginatedRegistration,
+  RegistrationBreakdown,
   RegistrationFilters,
   RegistrationStats,
 } from "@/types/registration";
@@ -331,6 +332,18 @@ export async function searchRegistration(
 ): Promise<PaginatedRegistration> {
   const { data } = await api.get<PaginatedRegistration>("/registration/search", {
     params: cleanParams(filters),
+    // Serialize `ai` array as ?ai=..&ai=.. (no brackets) for FastAPI list Query.
+    paramsSerializer: { indexes: null },
+  });
+  return data;
+}
+
+export async function getRegistrationBreakdown(
+  filters: RegistrationFilters
+): Promise<RegistrationBreakdown> {
+  const { data } = await api.get<RegistrationBreakdown>("/registration/breakdown", {
+    params: cleanParams(filters),
+    paramsSerializer: { indexes: null },
   });
   return data;
 }

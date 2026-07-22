@@ -76,6 +76,18 @@ export const registrationColumns: ColumnDef<RegistrationRecord, unknown>[] = [
     cell: ({ getValue }) => truncate(getValue() as string | null, 20) || "—",
   },
   {
+    id: "category",
+    accessorKey: "category",
+    header: "Category",
+    size: 120,
+    cell: ({ getValue }) => {
+      const v = (getValue() as string | null) ?? "Unknown";
+      const variant =
+        v === "Technical" ? "default" : v === "Formulation" ? "secondary" : "outline";
+      return <Badge variant={variant}>{v}</Badge>;
+    },
+  },
+  {
     id: "origin",
     accessorKey: "origin",
     header: "Origin",

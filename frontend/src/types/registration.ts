@@ -14,6 +14,22 @@ export interface RegistrationStats {
   query_ms?: number;
 }
 
+/** Filter-aware totals for the dynamic KPIs (from /registration/breakdown). */
+export interface RegistrationBreakdown {
+  available: boolean;
+  total: number;
+  distinct_countries: number;
+  countries: RegistrationCountry[];
+  query_ms?: number;
+}
+
+/** Operators for the active-ingredient logical builder. */
+export type AiOp = "contains" | "notcontains" | "equals" | "notequals";
+export interface AiCondition {
+  op: AiOp;
+  value: string;
+}
+
 export interface RegistrationRecord {
   country: string;
   product: string | null;
@@ -23,6 +39,7 @@ export interface RegistrationRecord {
   status: string | null;
   registration_no: string | null;
   formulation_type: string | null;
+  category: string | null;
   origin: string | null;
   /** JSON string of the row's full original (country-specific) fields. */
   raw_json: string;
@@ -34,6 +51,10 @@ export interface RegistrationFilters {
   product?: string;
   company?: string;
   country?: string;
+  category?: string;
+  /** Active-ingredient conditions as "op|value" strings. */
+  ai?: string[];
+  ai_join?: "and" | "or";
   sort_by?: string;
   sort_order?: "asc" | "desc";
   page?: number;

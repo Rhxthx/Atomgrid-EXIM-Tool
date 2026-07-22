@@ -42,6 +42,65 @@ def _norm(h: object) -> str:
     return re.sub(r"[^a-z0-9]", "", s.lower())
 
 
+# --- Technical / Formulation / Unknown classifier ---------------------------
+# Technical (TC/TK) = the near-pure active ingredient; Formulation = a
+# formulated product (formulation code/name, 2+ actives, or a liquid conc).
+_TECH_RE = re.compile(r"\b(technical|tech|tc|tk|tg)\b", re.I)
+# Common CropLife/GIFAP formulation-type codes (TC/TK excluded — technical).
+_FORM_CODES = ("EC", "SC", "SL", "SP", "WP", "WG", "WDG", "OD", "SG", "GR",
+               "CS", "DC", "EW", "ME", "FS", "ZC", "ZW", "SE", "GB", "DP", "EO")
+_CODE_RE = re.compile(r"\b(" + "|".join(_FORM_CODES) + r")\b")
+# Formulation NAMES / product-function words (EN / ES / ID) — many registries
+# spell the form out instead of a code. Applied to the formulation_type field.
+_FORM_NAME_RE = re.compile(
+    r"concentrat|emulsi|suspens|wettable|mojable|soluble|granul|dispersa|"
+    r"powder|polvo|\bdust\b|flowable|capsul|aerosol|tablet|pastilla|\bgel\b|"
+    r"\bbait\b|cebo|\bpaste\b|pasta|berbentuk|tepung|larutan|butiran|cair|"
+    r"herbicid|insecticid|fungicid|adjuvant|parasiticid|acaricid|rodenticid|"
+    r"nematicid|molluscicid|pestisid|fungisid|herbisid|insektisid|rodentisid|"
+    r"akarisid|moluskisid|nematisid|seed treatment|tratamiento"
+)
+_LIQ_RE = re.compile(r"\d+(?:[.,]\d+)?\s*(?:g|kg)\s*/\s*l\b", re.I)  # g/L, kg/L
+_PCT_RE = re.compile(r"(\d{1,3}(?:[.,]\d+)?)\s*%")
+_GKG_RE = re.compile(r"(\d{2,4})\s*g\s*/\s*kg", re.I)
+
+
+def _deaccent_lower(s: object) -> str:
+    return unicodedata.normalize("NFKD", str(s)).encode("ascii", "ignore").decode().lower()
+
+
+def _classify(product: str | None, ai: str | None,
+              conc: str | None, ftype: str | None) -> str:
+    ft = (ftype or "").strip()
+    ftl = _deaccent_lower(ft)
+    if ftl == "technical":
+        return "Technical"      # Argentina TC (tagged literally)
+    if ftl == "formulation":
+        return "Formulation"    # Argentina Formulation (tagged literally)
+    # Australia (APVMA) flags the raw active as "ACTIVE CONSTITUENT".
+    if "active constituent" in ftl:
+        return "Technical"
+    if _TECH_RE.search(" ".join(x for x in (ftype, product) if x)):
+        return "Technical"
+    if ai and "+" in ai:
+        return "Formulation"    # two or more actives -> formulated
+    if _CODE_RE.search(ft.upper()):
+        return "Formulation"    # explicit formulation code
+    if _FORM_NAME_RE.search(ftl):
+        return "Formulation"    # spelled-out formulation / product-function name
+    blob = " ".join(x for x in (conc, ai, product) if x)
+    if _LIQ_RE.search(blob):
+        return "Formulation"    # liquid concentration (g/L, kg/L)
+    if not (ai and "+" in ai):
+        m = _PCT_RE.search(blob)
+        if m and float(m.group(1).replace(",", ".")) >= 90:
+            return "Technical"  # single high-strength active
+        g = _GKG_RE.search(blob)
+        if g and int(g.group(1)) >= 900:
+            return "Technical"
+    return "Unknown"
+
+
 # Per-sheet mapping: normalised sheet name -> {target: normalised source header}.
 # None means the sheet has no such field. Keys are normalised so trailing
 # spaces / case / accents in sheet + column names don't matter.
@@ -194,6 +253,17 @@ def load(xlsx: Path, db_path: Path) -> int:
         pl.when(pl.col(t).str.len_chars() == 0).then(None).otherwise(pl.col(t)).alias(t)
         for t in TARGETS
     ])
+
+    # Derived Technical / Formulation / Unknown category.
+    out = out.with_columns(
+        pl.struct(["product", "active_ingredient", "concentration", "formulation_type"])
+        .map_elements(
+            lambda s: _classify(s["product"], s["active_ingredient"],
+                                s["concentration"], s["formulation_type"]),
+            return_dtype=pl.String,
+        )
+        .alias("category")
+    )
 
     log.info("Writing %d rows to table %s in %s", out.height, TABLE, db_path)
     con = duckdb.connect(str(db_path))
