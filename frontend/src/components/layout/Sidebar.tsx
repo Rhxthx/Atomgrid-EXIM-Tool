@@ -43,7 +43,7 @@ export function Sidebar() {
       <div className="flex h-16 items-center gap-2 border-b border-border px-5">
         <BarChart3 className="h-6 w-6 text-primary" />
         <div>
-          <div className="text-sm font-semibold leading-none">Trade Intelligence</div>
+          <div className="text-sm font-semibold leading-none">Atomgrid Data Tool</div>
           <div className="mt-1 text-[10px] uppercase tracking-wider text-muted-foreground">
             Global EXIM Insights
           </div>
