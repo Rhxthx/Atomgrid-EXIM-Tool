@@ -26,6 +26,11 @@ import type {
 } from "@/types/agbio";
 import type { ExportQuota } from "@/types/auth";
 import type {
+  PaginatedRegistration,
+  RegistrationFilters,
+  RegistrationStats,
+} from "@/types/registration";
+import type {
   CountryAnalysisResponse,
   DatasetStats,
   DuplicateResponse,
@@ -298,6 +303,26 @@ export function useAgBioBreakdown(filters: AgBioFilters) {
     queryFn: () => ep.getAgBioBreakdown(filters),
     placeholderData: (prev) => prev,
     staleTime: 60 * 1000,
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Global Registration hooks (separate dataset)
+// ---------------------------------------------------------------------------
+
+export function useRegistrationStats() {
+  return useQuery<RegistrationStats>({
+    queryKey: ["registration-stats"] as const,
+    queryFn: ep.getRegistrationStats,
+    staleTime: 5 * 60 * 1000,
+  });
+}
+
+export function useRegistrationSearch(filters: RegistrationFilters) {
+  return useQuery<PaginatedRegistration>({
+    queryKey: ["registration-search", filters] as const,
+    queryFn: () => ep.searchRegistration(filters),
+    placeholderData: (prev) => prev,
   });
 }
 

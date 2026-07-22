@@ -17,7 +17,8 @@ from fastapi.staticfiles import StaticFiles
 
 from app import __version__
 from app.api.routers import (
-    admin, advanced, agbio, analytics, argentina, auth, meta, query, search,
+    admin, advanced, agbio, analytics, argentina, auth, meta, query,
+    registration, search,
 )
 from app.auth import security, store as auth_store
 from app.auth.security import get_current_user
@@ -74,6 +75,7 @@ def create_app() -> FastAPI:
             {"name": "query-builder", "description": "Advanced logical filtering (Power-BI-style slicer)"},
             {"name": "argentina",     "description": "Argentina customs imports (separate dataset)"},
             {"name": "agbio",         "description": "AG-Bio crop-protection market values (separate dataset)"},
+            {"name": "registration",  "description": "Global product registration data (separate dataset)"},
         ],
         lifespan=lifespan,
     )
@@ -111,6 +113,7 @@ def create_app() -> FastAPI:
     app.include_router(query.router,     prefix="/api", dependencies=gated)
     app.include_router(argentina.router, prefix="/api", dependencies=gated)
     app.include_router(agbio.router,     prefix="/api", dependencies=gated)
+    app.include_router(registration.router, prefix="/api", dependencies=gated)
     # Admin router enforces admin via its own router-level dependency.
     app.include_router(admin.router,     prefix="/api")
 

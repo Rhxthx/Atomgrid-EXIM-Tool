@@ -14,6 +14,7 @@ import { HsnPage } from "@/pages/Hsn";
 import { CountriesPage } from "@/pages/Countries";
 import { ArgentinaPage } from "@/pages/Argentina";
 import { AgBioPage } from "@/pages/AgBio";
+import { RegistrationPage } from "@/pages/Registration";
 import { TrendsPage } from "@/pages/Trends";
 import { SavedPage } from "@/pages/Saved";
 import { BuilderPage } from "@/pages/Builder";
@@ -41,6 +42,7 @@ export default function App() {
           <Route path="/countries" element={<CountriesPage />} />
           <Route path="/argentina" element={<ArgentinaPage />} />
           <Route path="/agbio" element={<AgBioPage />} />
+          <Route path="/registration" element={<RegistrationPage />} />
           <Route path="/trends" element={<TrendsPage />} />
           <Route path="/saved" element={<SavedPage />} />
           <Route path="/admin" element={<AdminPage />} />

@@ -40,6 +40,11 @@ import type {
   PaginatedAgBio,
 } from "@/types/agbio";
 import type {
+  PaginatedRegistration,
+  RegistrationFilters,
+  RegistrationStats,
+} from "@/types/registration";
+import type {
   AuthUser,
   CreateUserInput,
   ExportQuota,
@@ -308,6 +313,24 @@ export async function getAgBioBreakdown(filters: AgBioFilters): Promise<AgBioBre
     filters as Record<string, unknown>;
   const { data } = await api.get<AgBioBreakdown>("/agbio/breakdown", {
     params: cleanParams(rest),
+  });
+  return data;
+}
+
+// ---------------------------------------------------------------------------
+// Global Registration (separate dataset — multi-country product registrations)
+// ---------------------------------------------------------------------------
+
+export async function getRegistrationStats(): Promise<RegistrationStats> {
+  const { data } = await api.get<RegistrationStats>("/registration/stats");
+  return data;
+}
+
+export async function searchRegistration(
+  filters: RegistrationFilters
+): Promise<PaginatedRegistration> {
+  const { data } = await api.get<PaginatedRegistration>("/registration/search", {
+    params: cleanParams(filters),
   });
   return data;
 }

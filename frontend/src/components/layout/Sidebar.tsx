@@ -11,6 +11,7 @@ import {
   SlidersHorizontal,
   Sprout,
   FlaskConical,
+  ClipboardCheck,
   Users,
 } from "lucide-react";
 
@@ -23,6 +24,7 @@ const NAV = [
   { to: "/builder",          label: "Query Builder",        icon: SlidersHorizontal },
   { to: "/argentina",        label: "Argentina Imports",    icon: Sprout },
   { to: "/agbio",            label: "AG-Bio Market",        icon: FlaskConical },
+  { to: "/registration",     label: "Global Registration",  icon: ClipboardCheck },
   { to: "/shipments",        label: "Shipment Explorer",    icon: Package },
   { to: "/hsn",              label: "HSN Analysis",         icon: Boxes },
   { to: "/countries",        label: "Country Analysis",     icon: Globe },
