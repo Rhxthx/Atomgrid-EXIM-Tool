@@ -55,6 +55,9 @@ export interface ArgentinaFilters {
   importer?: string;
   origin_country?: string;
   active_ingredient?: string;
+  /** Active-ingredient conditions as "op|value" strings, joined by ai_join. */
+  ai?: string[];
+  ai_join?: "and" | "or";
   date_from?: string;
   date_to?: string;
   year?: number;

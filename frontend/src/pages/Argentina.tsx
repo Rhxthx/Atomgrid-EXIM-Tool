@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import type { ColumnDef } from "@tanstack/react-table";
-import { Boxes, Building2, Globe, DollarSign } from "lucide-react";
+import { Boxes, Building2, Globe, DollarSign, Plus, X } from "lucide-react";
 
 import { PageHeader } from "@/components/PageHeader";
 import { KpiCard } from "@/components/KpiCard";
@@ -9,6 +9,9 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
+import {
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from "@/components/ui/select";
 import { cn } from "@/utils/cn";
 
 import {
@@ -27,6 +30,14 @@ import {
 import { useDebounce } from "@/hooks/useDebounce";
 import { formatInt, formatNumber, formatDate, truncate } from "@/utils/format";
 import type { ArgentinaRecord } from "@/types/argentina";
+import type { AiCondition, AiOp } from "@/types/registration";
+
+const OP_LABELS: { value: AiOp; label: string }[] = [
+  { value: "contains", label: "contains" },
+  { value: "notcontains", label: "not contains" },
+  { value: "equals", label: "equals" },
+  { value: "notequals", label: "not equals" },
+];
 
 /** Compact USD formatter (K / M / B) — the India L/Cr formatter would mislead here. */
 function usd(v: number | null | undefined): string {
@@ -107,9 +118,9 @@ export function ArgentinaPage() {
   const exportRowLimit = useExportRowLimit();
   const quota = useExportQuota();
 
-  const [search, setSearch] = useState("");
   const [origin, setOrigin] = useState("");
-  const [ingredient, setIngredient] = useState("");
+  const [aiConds, setAiConds] = useState<AiCondition[]>([{ op: "contains", value: "" }]);
+  const [aiJoin, setAiJoin] = useState<"and" | "or">("and");
   const [importer, setImporter] = useState("");
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
@@ -120,18 +131,31 @@ export function ArgentinaPage() {
     by: "date", order: "desc",
   });
 
-  const q = useDebounce(search, 300);
   const originD = useDebounce(origin, 300);
-  const ingredientD = useDebounce(ingredient, 300);
   const importerD = useDebounce(importer, 300);
+  const aiD = useDebounce(aiConds, 350);
+  const aiParams = useMemo(
+    () => aiD.filter((c) => c.value.trim()).map((c) => `${c.op}|${c.value.trim()}`),
+    [aiD]
+  );
+
+  const setCond = (i: number, patch: Partial<AiCondition>) => {
+    setAiConds((prev) => prev.map((c, idx) => (idx === i ? { ...c, ...patch } : c)));
+    setPage(1);
+  };
+  const addCond = () => setAiConds((prev) => [...prev, { op: "contains", value: "" }]);
+  const removeCond = (i: number) => {
+    setAiConds((prev) => (prev.length > 1 ? prev.filter((_, idx) => idx !== i) : prev));
+    setPage(1);
+  };
 
   const filters = useMemo(
     () => ({
-      q: q || undefined,
       type: ptype || undefined,
       importer: importerD || undefined,
       origin_country: originD || undefined,
-      active_ingredient: ingredientD || undefined,
+      ai: aiParams.length ? aiParams : undefined,
+      ai_join: aiJoin,
       date_from: dateFrom || undefined,
       date_to: dateTo || undefined,
       sort_by: sort.by,
@@ -139,7 +163,7 @@ export function ArgentinaPage() {
       page,
       page_size: pageSize,
     }),
-    [q, ptype, importerD, originD, ingredientD, dateFrom, dateTo, sort, page, pageSize]
+    [ptype, importerD, originD, aiParams, aiJoin, dateFrom, dateTo, sort, page, pageSize]
   );
 
   const typeCounts = useMemo(() => {
@@ -214,16 +238,42 @@ export function ArgentinaPage() {
 
       {/* Filters */}
       <div className="space-y-3">
-        <div>
-          <Input placeholder="Search… e.g. glyphosate AND china"
-            value={search} onChange={(e) => { setSearch(e.target.value); setPage(1); }} />
-          <p className="mt-1 text-xs text-muted-foreground">
-            Tip: combine terms with <span className="font-medium">AND</span> / <span className="font-medium">OR</span> —
-            e.g. <code>glyphosate AND china</code> or <code>atrazine OR paraquat</code>.
-          </p>
+        {/* Active-ingredient logical builder (matches English + Spanish names) */}
+        <div className="space-y-2">
+          <div className="flex items-center gap-3">
+            <Label className="text-sm">Active ingredient</Label>
+            {aiConds.length > 1 && (
+              <div className="flex items-center gap-1">
+                <span className="text-xs text-muted-foreground">match</span>
+                <Button size="sm" variant={aiJoin === "and" ? "default" : "outline"}
+                  className="h-6 px-2 text-xs" onClick={() => { setAiJoin("and"); setPage(1); }}>ALL (AND)</Button>
+                <Button size="sm" variant={aiJoin === "or" ? "default" : "outline"}
+                  className="h-6 px-2 text-xs" onClick={() => { setAiJoin("or"); setPage(1); }}>ANY (OR)</Button>
+              </div>
+            )}
+          </div>
+          {aiConds.map((c, i) => (
+            <div key={i} className="flex items-center gap-2">
+              <Select value={c.op} onValueChange={(v) => setCond(i, { op: v as AiOp })}>
+                <SelectTrigger className="h-9 w-[150px] shrink-0"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {OP_LABELS.map((o) => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}
+                </SelectContent>
+              </Select>
+              <Input className="flex-1" placeholder="glyphosate"
+                value={c.value} onChange={(e) => setCond(i, { value: e.target.value })} />
+              <Button variant="ghost" size="icon" className="h-9 w-9 shrink-0"
+                onClick={() => removeCond(i)} disabled={aiConds.length === 1} title="Remove condition">
+                <X className="h-4 w-4" />
+              </Button>
+            </div>
+          ))}
+          <Button variant="outline" size="sm" onClick={addCond}>
+            <Plus className="mr-1.5 h-3.5 w-3.5" /> Add ingredient condition
+          </Button>
         </div>
 
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-5">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
           <div className="space-y-1.5">
             <Label>Importer</Label>
             <Input placeholder="tecnomyl"
@@ -233,11 +283,6 @@ export function ArgentinaPage() {
             <Label>Origin country</Label>
             <Input placeholder="china"
               value={origin} onChange={(e) => { setOrigin(e.target.value); setPage(1); }} />
-          </div>
-          <div className="space-y-1.5">
-            <Label>Active ingredient</Label>
-            <Input placeholder="glyphosate"
-              value={ingredient} onChange={(e) => { setIngredient(e.target.value); setPage(1); }} />
           </div>
           <div className="space-y-1.5">
             <Label>From</Label>

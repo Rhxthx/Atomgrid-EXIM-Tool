@@ -268,15 +268,17 @@ export async function listArgentinaImports(
 ): Promise<PaginatedArgentina> {
   const { data } = await api.get<PaginatedArgentina>("/argentina/shipments", {
     params: cleanParams(filters),
+    paramsSerializer: { indexes: null },
   });
   return data;
 }
 
 /** Direct download URL for the full filtered Argentina export (streamed CSV). */
 export function buildArgentinaExportUrl(filters: ArgentinaFilters): string {
-  const { page: _p, page_size: _ps, ...rest } = filters as Record<string, unknown>;
-  const clean = cleanParams(rest);
-  const qs = new URLSearchParams(clean as Record<string, string>).toString();
+  const { page: _p, page_size: _ps, ai, ...rest } = filters as Record<string, unknown>;
+  const sp = new URLSearchParams(cleanParams(rest) as Record<string, string>);
+  (ai as string[] | undefined)?.forEach((c) => c && sp.append("ai", c));  // repeated ?ai=..
+  const qs = sp.toString();
   return `${API_BASE_URL}/argentina/export${qs ? `?${qs}` : ""}`;
 }
 
@@ -287,6 +289,7 @@ export async function getArgentinaAggregate(
   const { page: _p, page_size: _ps, ...rest } = filters as Record<string, unknown>;
   const { data } = await api.get<ArgentinaAggregate>("/argentina/aggregate", {
     params: cleanParams(rest),
+    paramsSerializer: { indexes: null },
   });
   return data;
 }

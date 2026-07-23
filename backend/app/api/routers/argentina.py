@@ -99,6 +99,20 @@ def _q_clause(q: str) -> tuple[str, list]:
     return "(" + f" {op} ".join(term_clauses) + ")", binds
 
 
+# Active-ingredient builder operators (op|value). Each matches BOTH the English
+# and original (Spanish) ingredient names so users can search in either.
+_AI_OPS = {
+    "contains":    ("(active_ingredient_en ILIKE ? OR active_ingredient ILIKE ?)",
+                    lambda v: [f"%{v}%", f"%{v}%"]),
+    "notcontains": ("(coalesce(active_ingredient_en,'') NOT ILIKE ? AND coalesce(active_ingredient,'') NOT ILIKE ?)",
+                    lambda v: [f"%{v}%", f"%{v}%"]),
+    "equals":      ("(lower(active_ingredient_en) = lower(?) OR lower(active_ingredient) = lower(?))",
+                    lambda v: [v, v]),
+    "notequals":   ("(coalesce(lower(active_ingredient_en),'') <> lower(?) AND coalesce(lower(active_ingredient),'') <> lower(?))",
+                    lambda v: [v, v]),
+}
+
+
 def _where(params: dict) -> tuple[str, list]:
     """Build a WHERE clause + bind values from optional filters."""
     clauses: list[str] = []
@@ -130,6 +144,22 @@ def _where(params: dict) -> tuple[str, list]:
     if params.get("year"):
         clauses.append("year = ?")
         binds.append(params["year"])
+
+    # Active-ingredient logical builder: "op|value" conditions joined by AND/OR.
+    conds = params.get("ai_conds") or []
+    join = "OR" if str(params.get("ai_join", "and")).lower() == "or" else "AND"
+    sub, sub_binds = [], []
+    for cond in conds:
+        op, _, val = str(cond).partition("|")
+        op, val = op.strip().lower(), val.strip()
+        if not val or op not in _AI_OPS:
+            continue
+        sql, mk = _AI_OPS[op]
+        sub.append(sql)
+        sub_binds.extend(mk(val))
+    if sub:
+        clauses.append("(" + f" {join} ".join(sub) + ")")
+        binds.extend(sub_binds)
 
     where = (" WHERE " + " AND ".join(clauses)) if clauses else ""
     return where, binds
@@ -199,6 +229,8 @@ def argentina_shipments(
     importer: str | None = None,
     origin_country: str | None = None,
     active_ingredient: str | None = None,
+    ai: list[str] | None = Query(None, description="Active-ingredient conditions as 'op|value' (contains/notcontains/equals/notequals)"),
+    ai_join: str = Query("and", description="Join AI conditions with 'and' or 'or'"),
     date_from: str | None = None,
     date_to: str | None = None,
     year: int | None = None,
@@ -215,6 +247,7 @@ def argentina_shipments(
         "q": q, "type": type, "importer": importer, "origin_country": origin_country,
         "active_ingredient": active_ingredient, "date_from": date_from,
         "date_to": date_to, "year": year,
+        "ai_conds": ai, "ai_join": ai_join,
     }
     where, binds = _where(params)
     order_col = sort_by if sort_by in SORTABLE else "date"
@@ -249,6 +282,8 @@ def argentina_aggregate(
     importer: str | None = None,
     origin_country: str | None = None,
     active_ingredient: str | None = None,
+    ai: list[str] | None = Query(None, description="Active-ingredient conditions as 'op|value' (contains/notcontains/equals/notequals)"),
+    ai_join: str = Query("and", description="Join AI conditions with 'and' or 'or'"),
     date_from: str | None = None,
     date_to: str | None = None,
     year: int | None = None,
@@ -264,6 +299,7 @@ def argentina_aggregate(
         "q": q, "type": type, "importer": importer, "origin_country": origin_country,
         "active_ingredient": active_ingredient, "date_from": date_from,
         "date_to": date_to, "year": year,
+        "ai_conds": ai, "ai_join": ai_join,
     }
     where, binds = _where(params)
     with timer() as t:
@@ -298,6 +334,8 @@ def argentina_export(
     importer: str | None = None,
     origin_country: str | None = None,
     active_ingredient: str | None = None,
+    ai: list[str] | None = Query(None, description="Active-ingredient conditions as 'op|value' (contains/notcontains/equals/notequals)"),
+    ai_join: str = Query("and", description="Join AI conditions with 'and' or 'or'"),
     date_from: str | None = None,
     date_to: str | None = None,
     year: int | None = None,
@@ -322,6 +360,7 @@ def argentina_export(
         "q": q, "type": type, "importer": importer, "origin_country": origin_country,
         "active_ingredient": active_ingredient, "date_from": date_from,
         "date_to": date_to, "year": year,
+        "ai_conds": ai, "ai_join": ai_join,
     }
     where, binds = _where(params)
     order_col = sort_by if sort_by in SORTABLE else "date"
