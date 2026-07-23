@@ -37,6 +37,12 @@ class FilterParams(BaseModel):
     # Free-text search across the columns in SEARCHABLE_TEXT_COLUMNS.
     q: Optional[str] = None
 
+    # Product-description logical builder. Conditions encoded as "op|value"
+    # joined by ";;", combined with pd_join ("and"/"or"). Ops: contains /
+    # notcontains / equals / notequals. (Powers Global Search's product builder.)
+    pd: Optional[str] = None
+    pd_join: Optional[str] = None
+
     # Party filters — substring match, case-insensitive.
     importer: Optional[str] = None
     exporter: Optional[str] = None
@@ -109,6 +115,8 @@ class FilterParams(BaseModel):
 
 def filter_params_dep(
     q: Annotated[Optional[str], Query(description="Free-text search across importer/exporter/supplier/buyer/product/HSN")] = None,
+    pd: Annotated[Optional[str], Query(description="Product-description conditions: 'op|value' joined by ';;' (op: contains/notcontains/equals/notequals)")] = None,
+    pd_join: Annotated[Optional[str], Query(description="Join product conditions with 'and' or 'or'")] = None,
     importer: Annotated[Optional[str], Query(description="Substring match on Importer (case-insensitive)")] = None,
     exporter: Annotated[Optional[str], Query(description="Substring match on Exporter (case-insensitive)")] = None,
     supplier: Annotated[Optional[str], Query(description="Substring match on Supplier (case-insensitive)")] = None,
@@ -137,6 +145,8 @@ def filter_params_dep(
     effective_page_size = min(effective_page_size, settings.max_page_size)
     return FilterParams(
         q=q,
+        pd=pd,
+        pd_join=pd_join,
         importer=importer,
         exporter=exporter,
         supplier=supplier,

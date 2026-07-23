@@ -8,7 +8,6 @@ import {
   LineChart,
   Bookmark,
   Boxes,
-  SlidersHorizontal,
   Sprout,
   FlaskConical,
   ClipboardCheck,
@@ -21,7 +20,6 @@ import { useMe } from "@/hooks/queries";
 const NAV = [
   { to: "/",                 label: "Dashboard",            icon: LayoutDashboard },
   { to: "/search",           label: "Global Search",        icon: Search },
-  { to: "/builder",          label: "Query Builder",        icon: SlidersHorizontal },
   { to: "/argentina",        label: "Argentina Imports",    icon: Sprout },
   { to: "/agbio",            label: "AG-Bio Market",        icon: FlaskConical },
   { to: "/registration",     label: "Global Registration",  icon: ClipboardCheck },

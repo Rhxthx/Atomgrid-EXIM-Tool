@@ -8,6 +8,8 @@ of values into the SQL.
 from __future__ import annotations
 
 import logging
+import re
+import unicodedata
 from typing import Any
 
 from app.database import DuckDBClient, iter_dict_rows
@@ -50,6 +52,32 @@ def _has_search_column(db: DuckDBClient) -> bool:
     return _search_column_present
 
 
+# Optional precomputed column: Product Description with all punctuation/spaces
+# stripped, enabling punctuation-insensitive product search ("2,4-D" = "24D").
+# Absent until the DB is rebuilt with add_search_column — the product builder
+# falls back to a plain ILIKE on Product Description until then.
+_pd_search_present: bool | None = None
+
+
+def _has_pd_search(db: DuckDBClient) -> bool:
+    global _pd_search_present
+    if _pd_search_present is not None:
+        return _pd_search_present
+    try:
+        rows = db.fetch_all(f"PRAGMA table_info({TABLE})")
+        _pd_search_present = any(r[1] == "_pd_search" for r in rows)
+    except Exception:  # noqa: BLE001
+        _pd_search_present = False
+    return _pd_search_present
+
+
+def _normq(v: str) -> str:
+    """Accent-fold, lowercase, strip ALL non-alphanumerics — matches how
+    ``_pd_search`` is built so a query reduces the same way ("2,4-D" -> "24d")."""
+    s = unicodedata.normalize("NFKD", str(v)).encode("ascii", "ignore").decode().lower()
+    return re.sub(r"[^a-z0-9]", "", s)
+
+
 # ---------------------------------------------------------------------------
 # WHERE-clause builder
 # ---------------------------------------------------------------------------
@@ -58,6 +86,7 @@ def build_where(
     f: FilterParams,
     *,
     use_search_column: bool = False,
+    use_pd_search: bool = False,
 ) -> tuple[str, list[Any], dict[str, Any]]:
     """Return ``(where_sql, params, filters_applied)``.
 
@@ -86,6 +115,36 @@ def build_where(
                 sub.append(f"{quote_ident(col)} ILIKE ?")
                 params.append(q_pattern)
             clauses.append("(" + " OR ".join(sub) + ")")
+
+    # ----- product-description logical builder -----------------------------
+    # Conditions "op|value" joined by ";;", combined with AND/OR. Matches the
+    # Product Description column only (Global Search's product builder).
+    if f.pd:
+        pd_col = quote_ident("Product Description")
+        join = "OR" if str(getattr(f, "pd_join", None) or "and").lower() == "or" else "AND"
+        sub: list[str] = []
+        for cond in f.pd.split(";;"):
+            op, _, val = cond.partition("|")
+            op, val = op.strip().lower(), val.strip()
+            if not val:
+                continue
+            if op == "contains":
+                if use_pd_search:
+                    sub.append("_pd_search LIKE ?"); params.append(f"%{_normq(val)}%")
+                else:
+                    sub.append(f"{pd_col} ILIKE ?"); params.append(f"%{val}%")
+            elif op == "notcontains":
+                if use_pd_search:
+                    sub.append("coalesce(_pd_search,'') NOT LIKE ?"); params.append(f"%{_normq(val)}%")
+                else:
+                    sub.append(f"({pd_col} IS NULL OR {pd_col} NOT ILIKE ?)"); params.append(f"%{val}%")
+            elif op == "equals":
+                sub.append(f"lower({pd_col}) = lower(?)"); params.append(val)
+            elif op == "notequals":
+                sub.append(f"({pd_col} IS NULL OR lower({pd_col}) <> lower(?))"); params.append(val)
+        if sub:
+            clauses.append("(" + f" {join} ".join(sub) + ")")
+            applied["product"] = f.pd
 
     # ----- party substring filters -----------------------------------------
     for fname, col in (
@@ -190,7 +249,7 @@ ALL_COLS_SQL = ", ".join(quote_ident(c) for c in SHIPMENT_COLUMNS)
 
 
 def count_shipments(db: DuckDBClient, f: FilterParams) -> int:
-    where, params, _ = build_where(f, use_search_column=_has_search_column(db))
+    where, params, _ = build_where(f, use_search_column=_has_search_column(db), use_pd_search=_has_pd_search(db))
     sql = f"SELECT COUNT(*) FROM {TABLE} {where}"
     row = db.fetch_one(sql, params)
     return int(row[0]) if row else 0
@@ -210,7 +269,7 @@ def list_shipments(
     ILIKE-OR over 672k rows.
     """
     with timer() as t:
-        where, params, applied = build_where(f, use_search_column=_has_search_column(db))
+        where, params, applied = build_where(f, use_search_column=_has_search_column(db), use_pd_search=_has_pd_search(db))
 
         total_sql = f"SELECT COUNT(*) FROM {TABLE} {where}"
         row = db.fetch_one(total_sql, params)
@@ -241,7 +300,7 @@ def aggregate_shipments(db: DuckDBClient, f: FilterParams) -> dict:
     average is over rows that actually have a unit price.
     """
     with timer() as t:
-        where, params, _ = build_where(f, use_search_column=_has_search_column(db))
+        where, params, _ = build_where(f, use_search_column=_has_search_column(db), use_pd_search=_has_pd_search(db))
         sql = (
             f"SELECT COUNT(*) AS count, "
             f"SUM({quote_ident('Quantity')}) AS total_quantity, "
@@ -282,7 +341,7 @@ def export_shipments_csv(db: DuckDBClient, f: FilterParams, *, row_cap: int = EX
     import csv
     import io
 
-    where, params, _ = build_where(f, use_search_column=_has_search_column(db))
+    where, params, _ = build_where(f, use_search_column=_has_search_column(db), use_pd_search=_has_pd_search(db))
     order_by = _order_by_clause(f)
     sql = (
         f"SELECT {ALL_COLS_SQL} FROM {TABLE} {where} "

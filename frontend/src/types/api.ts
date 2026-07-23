@@ -221,6 +221,9 @@ export type SortOrder = "asc" | "desc";
 
 export interface FilterParams {
   q?: string;
+  /** Product-description conditions: "op|value" joined by ";;". */
+  pd?: string;
+  pd_join?: "and" | "or";
   importer?: string;
   exporter?: string;
   supplier?: string;

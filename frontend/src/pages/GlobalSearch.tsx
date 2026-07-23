@@ -1,5 +1,5 @@
-import { useEffect, useRef, useState } from "react";
-import { Save, Search, Sparkles, X } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { Save, Sparkles, Plus, X } from "lucide-react";
 
 import { PageHeader } from "@/components/PageHeader";
 import { FilterPanel } from "@/components/filters/FilterPanel";
@@ -9,6 +9,10 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from "@/components/ui/select";
 
 import {
   useSearchShipments,
@@ -30,6 +34,31 @@ import {
 
 const COLS = shipmentColumns();
 
+type PdOp = "contains" | "notcontains" | "equals" | "notequals";
+interface PdCond { op: PdOp; value: string }
+const OP_LABELS: { value: PdOp; label: string }[] = [
+  { value: "contains", label: "contains" },
+  { value: "notcontains", label: "not contains" },
+  { value: "equals", label: "equals" },
+  { value: "notequals", label: "not equals" },
+];
+const EMPTY: PdCond[] = [{ op: "contains", value: "" }];
+
+/** "contains|glyphosate;;notcontains|acid" -> conditions */
+function decodePd(pd?: string): PdCond[] {
+  if (!pd) return EMPTY;
+  const out = pd.split(";;").map((s) => {
+    const i = s.indexOf("|");
+    if (i < 0) return null;
+    return { op: s.slice(0, i) as PdOp, value: s.slice(i + 1) };
+  }).filter(Boolean) as PdCond[];
+  return out.length ? out : EMPTY;
+}
+function encodePd(conds: PdCond[]): string | undefined {
+  const parts = conds.filter((c) => c.value.trim()).map((c) => `${c.op}|${c.value.trim()}`);
+  return parts.length ? parts.join(";;") : undefined;
+}
+
 export function GlobalSearchPage() {
   const [filters, setFilters] = useUrlFilters({ page: 1, page_size: 50 });
   const { data, isLoading, isFetching } = useSearchShipments(filters);
@@ -39,45 +68,50 @@ export function GlobalSearchPage() {
   const quota = useExportQuota();
   const saveSearch = useSavedStore((s) => s.saveSearch);
 
-  // Row-selection summary: "select all matching" totals the entire filtered
-  // set via the server aggregate (only fetched once the user opts in).
   const [allMatching, setAllMatching] = useState(false);
   const agg = useShipmentAggregate(filters, { enabled: allMatching });
 
-  // Local input state so typing feels instant; we push to URL/filters on
-  // Enter or after a brief debounce so the API isn't hit per keystroke.
-  const [draft, setDraft] = useState(filters.q ?? "");
-  const debouncedDraft = useDebounce(draft, 350);
-  const searchRef = useRef<HTMLInputElement>(null);
+  // Product-description builder. Seed from ?pd, or convert an incoming top-bar
+  // ?q= into a first "contains" condition so that entry point keeps working.
+  const [conds, setConds] = useState<PdCond[]>(() =>
+    filters.pd ? decodePd(filters.pd) : filters.q ? [{ op: "contains", value: filters.q }] : EMPTY
+  );
+  const [join, setJoin] = useState<"and" | "or">(filters.pd_join === "or" ? "or" : "and");
+  const debouncedConds = useDebounce(conds, 350);
 
-  // Focus the search input on mount so it's obvious where to type.
+  // Builder -> URL. Clears any seeded `q` once folded into a condition.
   useEffect(() => {
-    searchRef.current?.focus();
-  }, []);
-
-  // Sync URL → input when the user navigates here from elsewhere.
-  useEffect(() => {
-    setDraft(filters.q ?? "");
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filters.q]);
-
-  // Sync debounced input → URL so results update without explicit Enter.
-  useEffect(() => {
-    if (debouncedDraft !== (filters.q ?? "")) {
-      setFilters({ ...filters, q: debouncedDraft || undefined, page: 1 });
+    const pd = encodePd(debouncedConds);
+    if (pd !== (filters.pd ?? undefined) || filters.q) {
+      setFilters({ ...filters, pd, pd_join: pd ? join : undefined, q: undefined, page: 1 });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [debouncedDraft]);
+  }, [debouncedConds, join]);
 
-  const { data: similar } = useSimilar(debouncedDraft, "Importer", {
-    enabled: debouncedDraft.length >= 3,
-  });
+  // URL -> builder (back button / a loaded saved search).
+  useEffect(() => {
+    if ((filters.pd ?? undefined) !== encodePd(conds)) setConds(decodePd(filters.pd));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filters.pd]);
+
+  const firstTerm = useMemo(
+    () => debouncedConds.find((c) => c.value.trim())?.value.trim() ?? "",
+    [debouncedConds]
+  );
+  const { data: similar } = useSimilar(firstTerm, "Importer", { enabled: firstTerm.length >= 3 });
+
+  const setCond = (i: number, patch: Partial<PdCond>) =>
+    setConds((prev) => prev.map((c, idx) => (idx === i ? { ...c, ...patch } : c)));
+  const addCond = () => setConds((prev) => [...prev, { op: "contains", value: "" }]);
+  const removeCond = (i: number) =>
+    setConds((prev) => (prev.length > 1 ? prev.filter((_, idx) => idx !== i) : EMPTY));
+
+  const hasQuery = !!filters.pd;
 
   return (
     <div className="space-y-4">
       <PageHeader
         title="Global Search"
-        description="Free-text plus filters across the entire EXIM dataset."
         actions={
           <Button
             variant="outline"
@@ -85,7 +119,7 @@ export function GlobalSearchPage() {
             disabled={!data || data.meta.total === 0}
             onClick={() =>
               saveSearch({
-                name: filters.q?.trim() || `Search · ${new Date().toLocaleString()}`,
+                name: firstTerm || `Search · ${new Date().toLocaleString()}`,
                 pathname: "/search",
                 filters,
               })
@@ -102,7 +136,6 @@ export function GlobalSearchPage() {
         onChange={setFilters}
         reportingCountries={markets}
         marketCoverage={stats?.market_coverage}
-        // Don't repeat 'q' in the filter panel — the dedicated search box below owns it.
         fields={[
           "reporting_country",
           "trade_type",
@@ -119,33 +152,43 @@ export function GlobalSearchPage() {
         ]}
       />
 
-      {/* Prominent search bar — sits just above the results (below the filters)
-          so the user always sees their current query and can edit it inline. */}
-      <div className="relative">
-        <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-        <Input
-          ref={searchRef}
-          value={draft}
-          onChange={(e) => setDraft(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === "Enter") {
-              setFilters({ ...filters, q: draft || undefined, page: 1 });
-            }
-            if (e.key === "Escape") setDraft("");
-          }}
-          placeholder="Search importers, exporters, suppliers, HSN, products, descriptions…"
-          className="h-12 pl-10 pr-10 text-base"
-        />
-        {draft && (
-          <button
-            onClick={() => setDraft("")}
-            className="absolute right-2 top-1/2 -translate-y-1/2 rounded p-1 text-muted-foreground hover:bg-accent hover:text-foreground"
-            aria-label="Clear search"
-          >
-            <X className="h-4 w-4" />
-          </button>
-        )}
-      </div>
+      {/* Product builder — multiple conditions with AND/OR + contains/equals/not */}
+      <Card>
+        <CardContent className="space-y-2 p-4">
+          <div className="flex items-center gap-3">
+            <Label className="text-sm">Product / description</Label>
+            {conds.length > 1 && (
+              <div className="flex items-center gap-1">
+                <span className="text-xs text-muted-foreground">match</span>
+                <Button size="sm" variant={join === "and" ? "default" : "outline"}
+                  className="h-6 px-2 text-xs" onClick={() => setJoin("and")}>ALL (AND)</Button>
+                <Button size="sm" variant={join === "or" ? "default" : "outline"}
+                  className="h-6 px-2 text-xs" onClick={() => setJoin("or")}>ANY (OR)</Button>
+              </div>
+            )}
+          </div>
+          {conds.map((c, i) => (
+            <div key={i} className="flex items-center gap-2">
+              <Select value={c.op} onValueChange={(v) => setCond(i, { op: v as PdOp })}>
+                <SelectTrigger className="h-9 w-[150px] shrink-0"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {OP_LABELS.map((o) => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}
+                </SelectContent>
+              </Select>
+              <Input className="flex-1" placeholder="e.g. glyphosate"
+                value={c.value} onChange={(e) => setCond(i, { value: e.target.value })}
+                onKeyDown={(e) => { if (e.key === "Enter") setConds((p) => [...p]); }} />
+              <Button variant="ghost" size="icon" className="h-9 w-9 shrink-0"
+                onClick={() => removeCond(i)} disabled={conds.length === 1} title="Remove condition">
+                <X className="h-4 w-4" />
+              </Button>
+            </div>
+          ))}
+          <Button variant="outline" size="sm" onClick={addCond}>
+            <Plus className="mr-1.5 h-3.5 w-3.5" /> Add product condition
+          </Button>
+        </CardContent>
+      </Card>
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-[1fr_280px]">
         <DataTable
@@ -153,11 +196,11 @@ export function GlobalSearchPage() {
           data={data?.data ?? []}
           loading={isLoading || isFetching}
           emptyMessage={
-            filters.q
-              ? "No results — try fewer filters or check spelling."
-              : "Showing the most recent shipments. Type a query above to narrow down."
+            hasQuery
+              ? "No results — try fewer conditions or check spelling."
+              : "Showing the most recent shipments. Add a product condition above to narrow down."
           }
-          csvFilename={`search-${(filters.q || "all").slice(0, 24)}.csv`}
+          csvFilename={`search-${(firstTerm || "all").slice(0, 24)}.csv`}
           serverExportUrl={buildExportUrl(filters)}
           exportRowLimit={exportRowLimit}
           downloadsLeft={quota.data?.unlimited ? null : quota.data?.remaining ?? null}
@@ -225,7 +268,7 @@ export function GlobalSearchPage() {
                   {similar.matches.slice(0, 6).map((m) => (
                     <li key={m.name}>
                       <button
-                        onClick={() => setDraft(m.name)}
+                        onClick={() => setCond(0, { value: m.name })}
                         className="block w-full truncate rounded px-2 py-1 text-left text-xs hover:bg-accent"
                         title={m.name}
                       >

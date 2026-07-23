@@ -232,7 +232,7 @@ export function FilterPanel({
               <Input
                 value={value.hs_chapter ?? ""}
                 onChange={(e) => update("hs_chapter", e.target.value)}
-                placeholder="29 / 3808"
+                placeholder="29 / 3402 / 3808"
               />
             </Field>
           )}

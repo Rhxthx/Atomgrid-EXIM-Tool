@@ -61,28 +61,45 @@ def main() -> int:
     con = duckdb.connect(str(db_path), read_only=False)
     try:
         existing = {r[1] for r in con.execute(f"PRAGMA table_info({TABLE})").fetchall()}
+
+        # --- _search: lowercased concat of the searchable columns ----------
         if "_search" in existing:
-            log.info("_search column already present — nothing to do.")
-            return 0
+            log.info("_search column already present — skipping.")
+        else:
+            log.info("Adding _search column")
+            con.execute(f'ALTER TABLE {TABLE} ADD COLUMN _search VARCHAR')
+            # concat_ws skips NULLs cleanly so sparse rows get no stray separators.
+            concat_expr = "lower(concat_ws(' | ', " + ", ".join(
+                f'"{c}"' for c in SEARCH_SOURCE_COLS
+            ) + "))"
+            log.info("Populating _search (scans the full table once)")
+            t0 = time.perf_counter()
+            con.execute(f"UPDATE {TABLE} SET _search = {concat_expr}")
+            log.info("  populated in %.1fs", time.perf_counter() - t0)
 
-        log.info("Adding _search column")
-        con.execute(f'ALTER TABLE {TABLE} ADD COLUMN _search VARCHAR')
+        # --- _pd_search: Product Description, lowercased with ALL punctuation
+        # and spaces stripped, so a punctuation-insensitive product search
+        # ("2,4-D" = "24D" = "2,4 d") is a single fast column scan (same shape
+        # as _search — no query-time penalty). --------------------------------
+        if "_pd_search" in existing:
+            log.info("_pd_search column already present — skipping.")
+        else:
+            log.info("Adding _pd_search column")
+            con.execute(f'ALTER TABLE {TABLE} ADD COLUMN _pd_search VARCHAR')
+            log.info("Populating _pd_search (scans the full table once)")
+            t0 = time.perf_counter()
+            con.execute(
+                f"UPDATE {TABLE} SET _pd_search = "
+                f"nullif(regexp_replace(lower(coalesce(\"Product Description\", '')), "
+                f"'[^a-z0-9]', '', 'g'), '')"
+            )
+            log.info("  populated in %.1fs", time.perf_counter() - t0)
 
-        # Build the lowercased concatenation.  concat_ws('|', ...) skips NULLs
-        # cleanly so we don't end up with stray separators for sparse rows.
-        concat_expr = "lower(concat_ws(' | ', " + ", ".join(
-            f'"{c}"' for c in SEARCH_SOURCE_COLS
-        ) + "))"
-        log.info("Populating _search (this scans the full table once)")
-        t0 = time.perf_counter()
-        con.execute(f"UPDATE {TABLE} SET _search = {concat_expr}")
-        log.info("  populated in %.1fs", time.perf_counter() - t0)
-
-        # Cardinality sanity check.
-        n, n_non_null = con.execute(
-            f"SELECT COUNT(*), COUNT(_search) FROM {TABLE}"
+        n, s_nn, pd_nn = con.execute(
+            f"SELECT COUNT(*), COUNT(_search), COUNT(_pd_search) FROM {TABLE}"
         ).fetchone()
-        log.info("Total rows: %s · non-null _search: %s", f"{n:,}", f"{n_non_null:,}")
+        log.info("Total rows: %s · _search: %s · _pd_search: %s",
+                 f"{n:,}", f"{s_nn:,}", f"{pd_nn:,}")
 
         return 0
     finally:
