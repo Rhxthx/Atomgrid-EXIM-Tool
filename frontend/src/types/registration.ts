@@ -34,6 +34,7 @@ export interface RegistrationRecord {
   country: string;
   product: string | null;
   active_ingredient: string | null;
+  active_ingredient_en: string | null;
   concentration: string | null;
   company: string | null;
   status: string | null;

@@ -26,6 +26,11 @@ import duckdb
 import fastexcel
 import polars as pl
 
+try:
+    from ai_en_dict import to_english
+except ImportError:  # when imported as scripts.load_global_registration
+    from scripts.ai_en_dict import to_english
+
 log = logging.getLogger("load_global_registration")
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
@@ -263,6 +268,35 @@ def load(xlsx: Path, db_path: Path) -> int:
             return_dtype=pl.String,
         )
         .alias("category")
+    )
+
+    # English-normalised active ingredient (parallel column; original untouched).
+    # Unrecognised names -> NULL, so the UI falls back to the original value.
+    out = out.with_columns(
+        pl.col("active_ingredient")
+        .map_elements(to_english, return_dtype=pl.String)
+        .alias("active_ingredient_en")
+    )
+
+    # Punctuation/space-insensitive search key: canonical-English + original,
+    # accent-folded, lowercased, ALL non-alphanumerics stripped — so "2,4-D",
+    # "24D" and "2,4 d" all match the same rows. Internal only (not in the API
+    # column list); the query is normalised the same way server-side.
+    def _search_key(en: str | None, orig: str | None) -> str | None:
+        parts = []
+        for v in (en, orig):
+            if v:
+                t = unicodedata.normalize("NFKD", str(v)).encode("ascii", "ignore").decode().lower()
+                t = re.sub(r"[^a-z0-9]", "", t)
+                if t:
+                    parts.append(t)
+        return " ".join(parts) or None
+
+    out = out.with_columns(
+        pl.struct(["active_ingredient_en", "active_ingredient"])
+        .map_elements(lambda s: _search_key(s["active_ingredient_en"], s["active_ingredient"]),
+                      return_dtype=pl.String)
+        .alias("ai_search")
     )
 
     log.info("Writing %d rows to table %s in %s", out.height, TABLE, db_path)

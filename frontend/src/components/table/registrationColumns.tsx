@@ -28,11 +28,17 @@ export const registrationColumns: ColumnDef<RegistrationRecord, unknown>[] = [
     accessorKey: "active_ingredient",
     header: "Active Ingredient",
     size: 220,
-    cell: ({ getValue }) => (
-      <span title={(getValue() as string) ?? undefined}>
-        {truncate(getValue() as string | null, 40)}
-      </span>
-    ),
+    // Show the English-normalised name; fall back to the original when we
+    // couldn't map it. Original is always available on hover + in the expand.
+    cell: ({ row }) => {
+      const en = row.original.active_ingredient_en;
+      const orig = row.original.active_ingredient;
+      return (
+        <span title={orig ?? undefined}>
+          {truncate(en || orig, 40)}
+        </span>
+      );
+    },
   },
   {
     id: "concentration",

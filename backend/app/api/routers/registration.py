@@ -11,6 +11,8 @@ from __future__ import annotations
 
 import logging
 import math
+import re
+import unicodedata
 
 from fastapi import APIRouter, Depends, Query
 
@@ -27,18 +29,31 @@ TABLE = "global_registration"
 # Common (normalised) columns shown in the table; raw_json carries every
 # original country-specific field for the expand/details panel.
 LIST_COLS = [
-    "country", "product", "active_ingredient", "concentration", "company",
-    "status", "registration_no", "formulation_type", "category", "origin", "raw_json",
+    "country", "product", "active_ingredient", "active_ingredient_en", "concentration",
+    "company", "status", "registration_no", "formulation_type", "category", "origin", "raw_json",
 ]
 SORTABLE = {"country", "product", "active_ingredient", "company", "status",
             "registration_no", "category"}
 
+def _normq(v: str) -> str:
+    """Accent-fold, lowercase, strip ALL non-alphanumerics — matches how the
+    loader builds ``ai_search`` so "2,4-D"/"24D"/"2,4 d" all reduce to "24d"."""
+    s = unicodedata.normalize("NFKD", str(v)).encode("ascii", "ignore").decode().lower()
+    return re.sub(r"[^a-z0-9]", "", s)
+
+
 # Operators for the active-ingredient logical builder (op|value pairs).
+# contains/not-contains run against the punctuation-insensitive ``ai_search``
+# key (which already blends the English + original names), so spelling/punctuation
+# variants of the same ingredient all match. equals/not-equals stay literal
+# against the original + English names. Each returns its list of bind values.
 _AI_OPS = {
-    "contains":    ("active_ingredient ILIKE ?", lambda v: f"%{v}%"),
-    "notcontains": ("(active_ingredient IS NULL OR active_ingredient NOT ILIKE ?)", lambda v: f"%{v}%"),
-    "equals":      ("lower(active_ingredient) = lower(?)", lambda v: v),
-    "notequals":   ("(active_ingredient IS NULL OR lower(active_ingredient) <> lower(?))", lambda v: v),
+    "contains":    ("ai_search LIKE ?", lambda v: [f"%{_normq(v)}%"]),
+    "notcontains": ("coalesce(ai_search,'') NOT LIKE ?", lambda v: [f"%{_normq(v)}%"]),
+    "equals":      ("(lower(active_ingredient) = lower(?) OR lower(active_ingredient_en) = lower(?))",
+                    lambda v: [v, v]),
+    "notequals":   ("(coalesce(lower(active_ingredient),'') <> lower(?) AND coalesce(lower(active_ingredient_en),'') <> lower(?))",
+                    lambda v: [v, v]),
 }
 
 
@@ -56,11 +71,11 @@ def _where(params: dict) -> tuple[str, list]:
 
     if params.get("q"):
         q = f"%{params['q']}%"
-        clauses.append("(product ILIKE ? OR active_ingredient ILIKE ? OR company ILIKE ?)")
-        binds += [q, q, q]
+        clauses.append("(product ILIKE ? OR company ILIKE ? OR ai_search LIKE ?)")
+        binds += [q, q, f"%{_normq(params['q'])}%"]
     if params.get("active_ingredient"):
-        clauses.append("active_ingredient ILIKE ?")
-        binds.append(f"%{params['active_ingredient']}%")
+        clauses.append("ai_search LIKE ?")
+        binds.append(f"%{_normq(params['active_ingredient'])}%")
     if params.get("product"):
         clauses.append("product ILIKE ?")
         binds.append(f"%{params['product']}%")
@@ -88,7 +103,7 @@ def _where(params: dict) -> tuple[str, list]:
             continue
         sql, mk = _AI_OPS[op]
         sub_clauses.append(sql)
-        sub_binds.append(mk(val))
+        sub_binds.extend(mk(val))
     if sub_clauses:
         clauses.append("(" + f" {join} ".join(sub_clauses) + ")")
         binds.extend(sub_binds)
